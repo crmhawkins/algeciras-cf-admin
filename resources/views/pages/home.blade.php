@@ -36,7 +36,7 @@
         </div>
 
         <div class="lg:col-span-5 relative z-10">
-            <img src="{{ asset('img/escudo.svg') }}" alt="Escudo" class="w-full max-w-md mx-auto drop-shadow-[0_20px_30px_rgba(0,0,0,0.6)]">
+            <img src="{{ asset('img/club/escudo.png') }}" alt="Escudo" class="w-full max-w-md mx-auto drop-shadow-[0_20px_30px_rgba(0,0,0,0.6)]">
         </div>
     </div>
 
@@ -44,19 +44,19 @@
     <div class="relative border-t-2 border-algeciras-red bg-algeciras-ash">
         <div class="container mx-auto px-4 lg:px-8 py-6 grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
             <div>
-                <div class="font-display text-4xl text-algeciras-red">1909</div>
-                <div class="text-xs uppercase tracking-widest text-white/60">Fundación</div>
+                <div class="font-display font-black text-4xl text-algeciras-red">1912</div>
+                <div class="text-xs uppercase tracking-widest text-white/60">Año de fundación</div>
             </div>
             <div>
-                <div class="font-display text-4xl text-algeciras-red">117</div>
-                <div class="text-xs uppercase tracking-widest text-white/60">Aniversarios</div>
+                <div class="font-display font-black text-4xl text-algeciras-red">9</div>
+                <div class="text-xs uppercase tracking-widest text-white/60">Temporadas en 2ª A</div>
             </div>
             <div>
-                <div class="font-display text-4xl text-algeciras-red">1ª RFEF</div>
+                <div class="font-display font-black text-4xl text-algeciras-red">1ª RFEF</div>
                 <div class="text-xs uppercase tracking-widest text-white/60">Categoría 26-27</div>
             </div>
             <div>
-                <div class="font-display text-4xl text-algeciras-red">N. Mirador</div>
+                <div class="font-display font-black text-4xl text-algeciras-red">Mirador</div>
                 <div class="text-xs uppercase tracking-widest text-white/60">Nuestra casa</div>
             </div>
         </div>
@@ -132,7 +132,7 @@
             @for ($i = 1; $i <= 3; $i++)
                 <article class="bg-algeciras-ash hover:bg-algeciras-red transition group cursor-pointer">
                     <div class="aspect-[4/3] bg-gradient-to-br from-algeciras-red/40 to-algeciras-black flex items-center justify-center">
-                        <img src="{{ asset('img/escudo.svg') }}" alt="" class="h-24 w-auto opacity-30 group-hover:opacity-60 transition">
+                        <img src="{{ asset('img/club/escudo.png') }}" alt="" class="h-24 w-auto opacity-30 group-hover:opacity-60 transition">
                     </div>
                     <div class="p-6">
                         <p class="font-mono text-xs tracking-widest uppercase text-algeciras-red group-hover:text-white mb-2">25 mayo 2026</p>
@@ -148,14 +148,28 @@
 {{-- =====================================================
      PATROCINADORES
      ===================================================== --}}
-<section class="container mx-auto px-4 lg:px-8 py-20">
-    <p class="font-mono text-algeciras-red text-sm tracking-[0.4em] uppercase text-center mb-8">Patrocinadores oficiales</p>
-    <div class="grid grid-cols-3 md:grid-cols-6 gap-8 items-center opacity-70 grayscale">
-        @for ($i = 1; $i <= 6; $i++)
-            <div class="aspect-[3/1] border-2 border-algeciras-black/20 flex items-center justify-center font-display text-algeciras-black/40">
-                LOGO {{ $i }}
+<section class="bg-algeciras-cream py-20">
+    <div class="container mx-auto px-4 lg:px-8">
+        <p class="font-mono text-algeciras-red text-sm tracking-[0.4em] uppercase text-center mb-3">Patrocinador técnico</p>
+        <div class="flex justify-center mb-12">
+            <div class="bg-algeciras-black px-12 py-6 inline-flex items-center">
+                <img src="{{ asset('img/sponsors/capelli.png') }}" alt="Capelli Sport" class="h-12 w-auto">
             </div>
-        @endfor
+        </div>
+
+        <p class="font-mono text-algeciras-red text-sm tracking-[0.4em] uppercase text-center mb-8">Patrocinadores oficiales</p>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-8 items-center">
+            @foreach ([
+                ['nombre' => 'Hawkins', 'logo' => 'img/sponsors/hawkins.png', 'invertir' => true],
+                ['nombre' => 'Quirónsalud', 'logo' => 'img/sponsors/quironsalud.svg', 'invertir' => false],
+                ['nombre' => 'Centro Gráfico', 'logo' => 'img/sponsors/centro-grafico.png', 'invertir' => false],
+                ['nombre' => 'EWYT', 'logo' => 'img/sponsors/ewyt.png', 'invertir' => true],
+            ] as $s)
+                <div class="flex items-center justify-center p-6 hover:opacity-100 opacity-80 transition {{ $s['invertir'] ? 'bg-algeciras-black' : 'bg-white border border-algeciras-black/10' }}">
+                    <img src="{{ asset($s['logo']) }}" alt="{{ $s['nombre'] }}" class="h-12 w-auto max-w-full object-contain">
+                </div>
+            @endforeach
+        </div>
     </div>
 </section>
 

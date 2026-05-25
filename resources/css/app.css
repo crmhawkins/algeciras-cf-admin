@@ -7,18 +7,19 @@
    ============================================================ */
 
 @theme {
-    /* Marca */
-    --color-algeciras-red: #E30A2C;
-    --color-algeciras-red-dark: #B30822;
-    --color-algeciras-red-light: #FF1A3D;
+    /* Marca — rojo oficial Algeciras CF (CF2E2E uso UI, E51339 escudo) */
+    --color-algeciras-red: #CF2E2E;
+    --color-algeciras-red-dark: #A21F1F;
+    --color-algeciras-red-light: #E51339;
     --color-algeciras-black: #0A0A0A;
     --color-algeciras-ash: #1A1A1A;
+    --color-algeciras-gray: #3F3F3F;
     --color-algeciras-gold: #D4A24C;
     --color-algeciras-cream: #F5F5F0;
     --color-algeciras-bone: #ECECE7;
 
-    /* Tipografía */
-    --font-display: "Bebas Neue", "Anton", "Impact", system-ui, sans-serif;
+    /* Tipografía — "Anybody" es la alternativa libre a "Obviously" (Adobe) que usa el club */
+    --font-display: "Anybody", "Bebas Neue", "Anton", "Impact", system-ui, sans-serif;
     --font-sans: "Inter", system-ui, -apple-system, sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
