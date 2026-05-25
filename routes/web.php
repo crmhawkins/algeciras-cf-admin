@@ -13,4 +13,4 @@ Route::get('/actualidad',   [PageController::class, 'actualidad'])->name('actual
 Route::get('/actualidad/{news:slug}', [PageController::class, 'noticia'])->name('noticia');
 Route::get('/club',         [PageController::class, 'club'])->name('club');
 Route::get('/contacto',     [PageController::class, 'contacto'])->name('contacto');
-Route::get('/carrito',      \App\Livewire\CartPage::class)->name('carrito');
+Route::get('/carrito',      fn () => view('pages.carrito'))->name('carrito');
