@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Algeciras CF — Design System
+   Fuentes: Bebas Neue (display CAPS) + Inter (body)
+   Paleta: rojo carmín del escudo + negro + oro corona
+   ============================================================ */
+
+@import url('https://fonts.bunny.net/css?family=bebas-neue:400|inter:400,500,600,700,800,900|anton:400');
+
+@theme {
+    /* Marca */
+    --color-algeciras-red: #E30A2C;
+    --color-algeciras-red-dark: #B30822;
+    --color-algeciras-red-light: #FF1A3D;
+    --color-algeciras-black: #0A0A0A;
+    --color-algeciras-ash: #1A1A1A;
+    --color-algeciras-gold: #D4A24C;
+    --color-algeciras-cream: #F5F5F0;
+    --color-algeciras-bone: #ECECE7;
+
+    /* Tipografía */
+    --font-display: "Bebas Neue", "Anton", "Impact", system-ui, sans-serif;
+    --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+    /* Sombras agresivas */
+    --shadow-brutal: 6px 6px 0 0 #0A0A0A;
+    --shadow-brutal-red: 6px 6px 0 0 #E30A2C;
+    --shadow-brutal-lg: 12px 12px 0 0 #0A0A0A;
+}
+
+/* Defaults globales para el front público */
+@layer base {
+    html { @apply antialiased; }
+    body {
+        @apply bg-algeciras-cream text-algeciras-black font-sans;
+        font-feature-settings: 'ss01', 'cv11';
+    }
+    h1, h2, h3, h4, h5, h6 {
+        @apply font-display tracking-wide uppercase;
+    }
+}
+
+/* Utility helpers de marca */
+@layer utilities {
+    .text-shadow-brutal {
+        text-shadow: 4px 4px 0 var(--color-algeciras-red);
+    }
+    .clip-tarjeta {
+        clip-path: polygon(0 0, 100% 0, 100% calc(100% - 28px), calc(100% - 28px) 100%, 0 100%);
+    }
+    .grano {
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.18 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+}
