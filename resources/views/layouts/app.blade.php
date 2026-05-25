@@ -19,7 +19,7 @@
 <body class="min-h-screen flex flex-col">
 
     {{-- ========== HEADER ========== --}}
-    <header class="sticky top-0 z-50 bg-algeciras-black text-white border-b-2 border-algeciras-red">
+    <header x-data="{ open: false }" class="sticky top-0 z-50 bg-algeciras-black text-white border-b-2 border-algeciras-red">
         <div class="container mx-auto px-4 lg:px-8 h-16 flex items-center justify-between">
             <a href="{{ route('home') }}" class="flex items-center gap-3 group">
                 <img src="{{ asset('img/club/escudo.png') }}" alt="Escudo Algeciras CF" class="h-12 w-auto transition group-hover:scale-110">
@@ -29,23 +29,48 @@
                 </div>
             </a>
 
-            <nav class="hidden lg:flex items-center gap-8 font-display tracking-wider">
-                <a href="#" class="hover:text-algeciras-red transition uppercase">Club</a>
-                <a href="#" class="hover:text-algeciras-red transition uppercase">Equipo</a>
-                <a href="#" class="hover:text-algeciras-red transition uppercase">Calendario</a>
-                <a href="#" class="hover:text-algeciras-red transition uppercase">Actualidad</a>
-                <a href="#" class="hover:text-algeciras-red transition uppercase">Tienda</a>
-                <a href="#" class="hover:text-algeciras-red transition uppercase">Entradas</a>
+            @php
+                $navItems = [
+                    ['label' => 'Club',       'route' => 'club'],
+                    ['label' => 'Equipo',     'route' => 'equipo'],
+                    ['label' => 'Calendario', 'route' => 'calendario'],
+                    ['label' => 'Actualidad', 'route' => 'actualidad'],
+                    ['label' => 'Tienda',     'route' => 'tienda'],
+                    ['label' => 'Entradas',   'route' => 'tienda', 'params' => ['type' => 'entrada']],
+                ];
+            @endphp
+
+            <nav class="hidden lg:flex items-center gap-7 font-display tracking-wider">
+                @foreach ($navItems as $item)
+                    <a href="{{ route($item['route'], $item['params'] ?? []) }}"
+                       class="hover:text-algeciras-red transition uppercase {{ request()->routeIs($item['route']) ? 'text-algeciras-red' : '' }}">
+                        {{ $item['label'] }}
+                    </a>
+                @endforeach
             </nav>
 
             <div class="flex items-center gap-3">
-                <a href="#" class="hidden md:inline-block px-4 py-2 bg-algeciras-red hover:bg-algeciras-red-dark transition font-display tracking-wider uppercase text-sm">
+                <a href="{{ route('abonos') }}" class="hidden md:inline-block px-4 py-2 bg-algeciras-red hover:bg-algeciras-red-dark transition font-display tracking-wider uppercase text-sm">
                     Hazte abonado
                 </a>
-                <button class="lg:hidden" aria-label="Menú">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+                <button @click="open = !open" class="lg:hidden p-2" aria-label="Menú" aria-expanded="false" :aria-expanded="open.toString()">
+                    <svg x-show="!open" xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+                    <svg x-show="open" x-cloak xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 6l12 12M6 18L18 6"/></svg>
                 </button>
             </div>
+        </div>
+
+        {{-- Drawer móvil --}}
+        <div x-show="open" x-cloak x-transition class="lg:hidden border-t border-white/10 bg-algeciras-black">
+            <nav class="container mx-auto px-4 py-4 flex flex-col gap-3 font-display tracking-wider text-lg uppercase">
+                @foreach ($navItems as $item)
+                    <a href="{{ route($item['route'], $item['params'] ?? []) }}" class="py-2 border-b border-white/5 hover:text-algeciras-red">
+                        {{ $item['label'] }}
+                    </a>
+                @endforeach
+                <a href="{{ route('abonos') }}" class="mt-2 inline-block px-4 py-3 bg-algeciras-red text-center">Hazte abonado</a>
+                <a href="{{ route('contacto') }}" class="text-sm text-algeciras-bone/70 normal-case tracking-normal">Contacto</a>
+            </nav>
         </div>
     </header>
 

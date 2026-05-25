@@ -29,6 +29,9 @@
     --shadow-brutal-lg: 12px 12px 0 0 #0A0A0A;
 }
 
+/* Alpine x-cloak: evita parpadeo de elementos x-show antes de hidratar */
+[x-cloak] { display: none !important; }
+
 /* Defaults globales para el front público */
 @layer base {
     html { @apply antialiased; }
