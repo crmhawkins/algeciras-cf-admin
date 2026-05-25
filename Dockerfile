@@ -42,7 +42,10 @@ RUN chmod +x /entrypoint.sh
 
 WORKDIR /var/www/html
 
-# Copiar composer.* y instalar deps (cache layer)
+# Preparar directorios cache ANTES de composer (package:discover los necesita)
+RUN mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
+
+# Copiar composer.* y instalar deps (cache layer Docker)
 COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
 
@@ -50,12 +53,11 @@ RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
 COPY . .
 COPY --from=node-builder /app/public/build /var/www/html/public/build
 
-# Generar autoloader optimizado (ahora que tenemos todo el código)
-RUN composer dump-autoload --no-dev --optimize --classmap-authoritative
+# Generar autoloader optimizado (SIN scripts; el package:discover lo ejecuta el entrypoint)
+RUN composer dump-autoload --no-dev --optimize --no-scripts
 
 # Permisos
-RUN mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
-    && chown -R www-data:www-data storage bootstrap/cache public \
+RUN chown -R www-data:www-data storage bootstrap/cache public \
     && chmod -R 775 storage bootstrap/cache
 
 EXPOSE 80
