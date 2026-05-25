@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
             ClubStaffSeeder::class,
             SponsorsSeeder::class,
             ProductsSeeder::class,
+            MerchSeeder::class,
             MatchesSeeder::class,
         ]);
     }

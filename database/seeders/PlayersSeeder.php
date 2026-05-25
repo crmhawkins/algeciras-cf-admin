@@ -14,24 +14,30 @@ class PlayersSeeder extends Seeder
      */
     public function run(): void
     {
+        // Fotos extraídas de algecirasclubdefutbol.com vía JS rendering. Filename = dorsal.
+        $photo = fn (int $d) => file_exists(public_path("img/players/{$d}.png")) ? "img/players/{$d}.png" : null;
+
         $players = [
             // PORTEROS
-            ['dorsal' => 1,  'display_name' => 'Iván Moreno',    'position' => 'portero'],
-            ['dorsal' => 13, 'display_name' => 'Samu Casado',    'position' => 'portero'],
+            ['dorsal' => 1,  'display_name' => 'Iván Moreno',    'position' => 'portero',        'photo' => $photo(1)],
+            ['dorsal' => 13, 'display_name' => 'Samu Casado',    'position' => 'portero',        'photo' => $photo(13)],
 
             // DEFENSAS
-            ['dorsal' => 2,  'display_name' => 'Carlos Arauz',   'position' => 'defensa'],
-            ['dorsal' => 3,  'display_name' => 'Joseca',         'position' => 'defensa'],
-            ['dorsal' => 4,  'display_name' => 'Aleix Coch',     'position' => 'defensa'],
-            ['dorsal' => 6,  'display_name' => 'Álvaro Mayorga', 'position' => 'defensa'],
-            ['dorsal' => 11, 'display_name' => 'Tomás Sánchez',  'position' => 'defensa'],
-            ['dorsal' => 15, 'display_name' => 'Víctor Ruiz',    'position' => 'defensa'],
-            ['dorsal' => 16, 'display_name' => 'Ángel Gómez',    'position' => 'defensa'],
-            ['dorsal' => 22, 'display_name' => 'París Adot',     'position' => 'defensa'],
+            ['dorsal' => 2,  'display_name' => 'Carlos Arauz',   'position' => 'defensa',        'photo' => $photo(2)],
+            ['dorsal' => 3,  'display_name' => 'Joseca',         'position' => 'defensa',        'photo' => $photo(3)],
+            ['dorsal' => 4,  'display_name' => 'Aleix Coch',     'position' => 'defensa',        'photo' => $photo(4)],
+            ['dorsal' => 6,  'display_name' => 'Álvaro Mayorga', 'position' => 'defensa',        'photo' => $photo(6)],
+            ['dorsal' => 11, 'display_name' => 'Tomás Sánchez',  'position' => 'defensa',        'photo' => $photo(11)],
+            ['dorsal' => 15, 'display_name' => 'Víctor Ruiz',    'position' => 'defensa',        'photo' => $photo(15)],
+            ['dorsal' => 16, 'display_name' => 'Ángel Gómez',    'position' => 'defensa',        'photo' => $photo(16)],
+            ['dorsal' => 22, 'display_name' => 'París Adot',     'position' => 'defensa',        'photo' => $photo(22)],
 
-            // CENTROCAMPISTAS + DELANTEROS — placeholders para completar desde admin
-            ['dorsal' => null, 'display_name' => 'Centrocampista TBD',  'position' => 'centrocampista', 'active' => false],
-            ['dorsal' => null, 'display_name' => 'Delantero TBD',       'position' => 'delantero',      'active' => false],
+            // CENTROCAMPISTAS y DELANTEROS — extra dorsales con foto pero sin nombre confirmado
+            ['dorsal' => 5,  'display_name' => 'Centrocampista #5',  'position' => 'centrocampista', 'photo' => $photo(5)],
+            ['dorsal' => 9,  'display_name' => 'Delantero #9',       'position' => 'delantero',      'photo' => $photo(9)],
+            ['dorsal' => 10, 'display_name' => 'Centrocampista #10', 'position' => 'centrocampista', 'photo' => $photo(10)],
+            ['dorsal' => 17, 'display_name' => 'Centrocampista #17', 'position' => 'centrocampista', 'photo' => $photo(17)],
+            ['dorsal' => 20, 'display_name' => 'Delantero #20',      'position' => 'delantero',      'photo' => $photo(20)],
         ];
 
         foreach ($players as $i => $p) {
