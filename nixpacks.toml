@@ -1,0 +1,28 @@
+# Configuración Nixpacks para Coolify
+# https://nixpacks.com/docs
+
+[phases.setup]
+nixPkgs = ['php83', 'php83Packages.composer', 'nodejs_20']
+aptPkgs = ['libpng-dev', 'libzip-dev']
+
+[phases.install]
+cmds = [
+    'composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader',
+    'npm ci'
+]
+
+[phases.build]
+cmds = [
+    'npm run build',
+    'php artisan config:cache',
+    'php artisan route:cache',
+    'php artisan view:cache',
+    'php artisan event:cache'
+]
+
+[start]
+cmd = 'php artisan migrate --force && php-fpm -F & nginx -g "daemon off;"'
+
+[variables]
+NIXPACKS_PHP_FALLBACK_PATH = '/index.php'
+NIXPACKS_PHP_ROOT_DIR = '/app/public'

@@ -1,0 +1,40 @@
+# Dependencias se reinstalan en el build
+/node_modules
+/vendor
+
+# Entorno local
+.env
+.env.*
+!.env.example
+
+# Build artifacts (Vite los regenera)
+/public/build
+/public/hot
+
+# Logs y storage local
+/storage/logs/*.log
+/storage/framework/cache/data
+/storage/framework/sessions
+/storage/framework/views
+/storage/framework/testing
+
+# Base de datos local SQLite
+/database/database.sqlite
+
+# IDE / OS
+.idea
+.vscode
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Claude / docs locales
+.claude/launch.json
+.claude/worktrees
+
+# Tests
+/phpunit.xml
+/tests
