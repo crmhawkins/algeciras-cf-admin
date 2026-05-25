@@ -67,11 +67,11 @@
                 <span class="font-display text-2xl uppercase">Total</span>
                 <span class="font-display text-4xl text-algeciras-red">{{ number_format($this->total, 2, ',', '.') }}€</span>
             </div>
-            <button type="button"
-                    class="w-full px-6 py-4 bg-algeciras-red hover:bg-algeciras-red-dark text-white font-display tracking-widest uppercase shadow-brutal hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition">
-                Tramitar pedido
-            </button>
-            <p class="text-xs text-algeciras-gray mt-3 text-center">Stripe checkout se activa en fase 2.</p>
+            <a href="{{ route('checkout') }}"
+               class="block text-center w-full px-6 py-4 bg-algeciras-red hover:bg-algeciras-red-dark text-white font-display tracking-widest uppercase shadow-brutal hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition">
+                Tramitar pedido →
+            </a>
+            <p class="text-xs text-algeciras-gray mt-3 text-center">Pago simulado mientras Stripe no esté contratado.</p>
         </aside>
     </div>
 @endif
