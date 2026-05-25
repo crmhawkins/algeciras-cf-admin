@@ -28,9 +28,19 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->brandName('Algeciras CF — Admin')
+            ->brandLogoHeight('2.5rem')
+            ->favicon(asset('favicon.ico'))
+            ->darkMode(true)
             ->colors([
-                'primary' => Color::Amber,
+                'primary' => Color::hex('#E30A2C'),
+                'gray' => Color::Zinc,
+                'danger' => Color::Red,
+                'warning' => Color::Amber,
+                'success' => Color::Emerald,
+                'info' => Color::Sky,
             ])
+            ->font('Inter')
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->pages([

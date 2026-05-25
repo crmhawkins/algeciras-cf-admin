@@ -6,8 +6,6 @@
    Paleta: rojo carmín del escudo + negro + oro corona
    ============================================================ */
 
-@import url('https://fonts.bunny.net/css?family=bebas-neue:400|inter:400,500,600,700,800,900|anton:400');
-
 @theme {
     /* Marca */
     --color-algeciras-red: #E30A2C;
@@ -51,6 +49,7 @@
         clip-path: polygon(0 0, 100% 0, 100% calc(100% - 28px), calc(100% - 28px) 100%, 0 100%);
     }
     .grano {
-        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.18 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        background-image: radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px);
+        background-size: 3px 3px;
     }
 }
