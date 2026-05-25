@@ -5,48 +5,69 @@ namespace Database\Seeders;
 use App\Models\Player;
 use Illuminate\Database\Seeder;
 
+/**
+ * Plantilla 25/26 oficial del Algeciras CF.
+ * Datos + fotos extraídos vía WordPress REST API de algecirasclubdefutbol.com
+ * (filename patrón "Posicion-NoX-Nombre.jpg" en /wp-content/uploads/2025/01/).
+ */
 class PlayersSeeder extends Seeder
 {
-    /**
-     * Plantilla parcial 2025-26 extraída de algecirasclubdefutbol.com/primer-equipo/plantilla
-     * Faltan centrocampistas y delanteros (lazy-load JS, no se pudieron scrapear estáticamente).
-     * Marcamos `active = true` para los confirmados; resto se rellena desde admin.
-     */
     public function run(): void
     {
-        // Fotos extraídas de algecirasclubdefutbol.com vía JS rendering. Filename = dorsal.
-        $photo = fn (int $d) => file_exists(public_path("img/players/{$d}.png")) ? "img/players/{$d}.png" : null;
-
         $players = [
             // PORTEROS
-            ['dorsal' => 1,  'display_name' => 'Iván Moreno',    'position' => 'portero',        'photo' => $photo(1)],
-            ['dorsal' => 13, 'display_name' => 'Samu Casado',    'position' => 'portero',        'photo' => $photo(13)],
+            [1,  'Iker Venteo',      'portero'],
+            [13, 'Lucho García',     'portero'],
 
             // DEFENSAS
-            ['dorsal' => 2,  'display_name' => 'Carlos Arauz',   'position' => 'defensa',        'photo' => $photo(2)],
-            ['dorsal' => 3,  'display_name' => 'Joseca',         'position' => 'defensa',        'photo' => $photo(3)],
-            ['dorsal' => 4,  'display_name' => 'Aleix Coch',     'position' => 'defensa',        'photo' => $photo(4)],
-            ['dorsal' => 6,  'display_name' => 'Álvaro Mayorga', 'position' => 'defensa',        'photo' => $photo(6)],
-            ['dorsal' => 11, 'display_name' => 'Tomás Sánchez',  'position' => 'defensa',        'photo' => $photo(11)],
-            ['dorsal' => 15, 'display_name' => 'Víctor Ruiz',    'position' => 'defensa',        'photo' => $photo(15)],
-            ['dorsal' => 16, 'display_name' => 'Ángel Gómez',    'position' => 'defensa',        'photo' => $photo(16)],
-            ['dorsal' => 22, 'display_name' => 'París Adot',     'position' => 'defensa',        'photo' => $photo(22)],
+            [2,  'Rafa Roldán',      'defensa'],
+            [3,  'Dani Merchán',     'defensa'],
+            [4,  'Lautaro Spatz',    'defensa'],
+            [5,  'Arnau Gaixas',     'defensa'],
+            [11, 'Tomás Sánchez',    'defensa'],
+            [20, 'París Adot',       'defensa'],
+            [22, 'Aleix Coch',       'defensa'],
+            [31, 'Curro',            'defensa'],
 
-            // CENTROCAMPISTAS y DELANTEROS — extra dorsales con foto pero sin nombre confirmado
-            ['dorsal' => 5,  'display_name' => 'Centrocampista #5',  'position' => 'centrocampista', 'photo' => $photo(5)],
-            ['dorsal' => 9,  'display_name' => 'Delantero #9',       'position' => 'delantero',      'photo' => $photo(9)],
-            ['dorsal' => 10, 'display_name' => 'Centrocampista #10', 'position' => 'centrocampista', 'photo' => $photo(10)],
-            ['dorsal' => 17, 'display_name' => 'Centrocampista #17', 'position' => 'centrocampista', 'photo' => $photo(17)],
-            ['dorsal' => 20, 'display_name' => 'Delantero #20',      'position' => 'delantero',      'photo' => $photo(20)],
+            // CENTROCAMPISTAS
+            [6,  'Eric Montes',      'centrocampista'],
+            [8,  'Iván Turrillo',    'centrocampista'],
+            [14, 'Javi Alonso',      'centrocampista'],
+            [15, 'Mario Fernández',  'centrocampista'],
+            [19, 'Marino Illesca',   'centrocampista'],
+            [21, 'Neco Celorio',     'centrocampista'],
+
+            // DELANTEROS
+            [7,  'Rodrigo Escudero', 'delantero'],
+            [9,  'Manín',            'delantero'],
+            [10, 'Diego Esteban',    'delantero'],
+            [16, 'Javi Avilés',      'delantero'],
+            [17, 'Álvaro Leiva',     'delantero'],
+            [18, 'Juan Hernández',   'delantero'],
+            [23, 'Javi Gómez',       'delantero'],
+            [27, 'Daniel Recagno',   'delantero'],
         ];
 
-        foreach ($players as $i => $p) {
-            $p['nationality'] = $p['nationality'] ?? 'España';
-            $p['active']      = $p['active'] ?? true;
-            $p['sort_order']  = $i;
+        foreach ($players as $i => [$dorsal, $name, $position]) {
+            // Slug del nombre para construir el path de la foto (mismo formato que el download)
+            $slug = strtolower(strtr($name, [
+                'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ñ' => 'n',
+                'Á' => 'a', 'É' => 'e', 'Í' => 'i', 'Ó' => 'o', 'Ú' => 'u', 'Ñ' => 'n',
+            ]));
+            $slug = preg_replace('/\s+/', '-', $slug);
+            $slug = preg_replace('/[^a-z0-9-]/', '', $slug);
+            $photoPath = "img/players/{$dorsal}-{$slug}.jpg";
+
             Player::updateOrCreate(
-                ['display_name' => $p['display_name']],
-                $p,
+                ['dorsal' => $dorsal],
+                [
+                    'display_name' => $name,
+                    'position'     => $position,
+                    'photo'        => file_exists(public_path($photoPath)) ? $photoPath : null,
+                    'nationality'  => 'España',
+                    'active'       => true,
+                    'sort_order'   => $i,
+                ]
             );
         }
     }
