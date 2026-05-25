@@ -4,8 +4,12 @@ namespace App\Livewire;
 
 use App\Services\Cart;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Layout;
+use Livewire\Attributes\Title;
 use Livewire\Component;
 
+#[Layout('layouts.app')]
+#[Title('Carrito')]
 class CartPage extends Component
 {
     public function updateQty(string $key, int $qty, Cart $cart): void
