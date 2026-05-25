@@ -44,23 +44,8 @@
                 </div>
             @endif
 
-            @if ($product->has_variants && $product->variants->count())
-                <div class="mb-6">
-                    <p class="font-display tracking-widest uppercase text-sm mb-3">Talla</p>
-                    <div class="flex flex-wrap gap-2">
-                        @foreach ($product->variants->where('active', true) as $v)
-                            <button class="px-4 py-2 border-2 border-algeciras-black hover:bg-algeciras-black hover:text-white font-display tracking-wider {{ $v->stock <= 0 ? 'opacity-30 line-through cursor-not-allowed' : '' }}">
-                                {{ $v->size ?? $v->color }}
-                            </button>
-                        @endforeach
-                    </div>
-                </div>
-            @endif
-
-            <button class="w-full md:w-auto px-10 py-4 bg-algeciras-red hover:bg-algeciras-red-dark text-white font-display tracking-widest uppercase text-lg shadow-brutal hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition" {{ !$product->is_available ? 'disabled' : '' }}>
-                {{ $product->is_available ? 'Añadir al carrito' : 'Agotado' }}
-            </button>
-            <p class="text-xs text-algeciras-gray mt-3">El carrito y checkout Stripe se activan en fase 2 del proyecto.</p>
+            <livewire:add-to-cart :product="$product" />
+            <p class="text-xs text-algeciras-gray mt-3">El checkout Stripe se activa cuando el club nos pase las claves.</p>
         </div>
     </div>
 </section>

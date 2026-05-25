@@ -1,3 +1,4 @@
+{{-- Algeciras CF — layout principal (Livewire 4 + Tailwind v4 + Alpine) --}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="scroll-smooth">
 <head>
@@ -15,6 +16,7 @@
     <link rel="stylesheet" href="https://fonts.bunny.net/css?family=anybody:400,500,600,700,800,900|inter:400,500,600,700,800,900|bebas-neue:400">
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @livewireStyles
 </head>
 <body class="min-h-screen flex flex-col">
 
@@ -49,7 +51,8 @@
                 @endforeach
             </nav>
 
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-4">
+                <livewire:cart-counter />
                 <a href="{{ route('abonos') }}" class="hidden md:inline-block px-4 py-2 bg-algeciras-red hover:bg-algeciras-red-dark transition font-display tracking-wider uppercase text-sm">
                     Hazte abonado
                 </a>
@@ -133,5 +136,6 @@
         </div>
     </footer>
 
+    @livewireScripts
 </body>
 </html>
