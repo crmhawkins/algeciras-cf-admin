@@ -32,6 +32,35 @@
 /* Alpine x-cloak: evita parpadeo de elementos x-show antes de hidratar */
 [x-cloak] { display: none !important; }
 
+/* GSAP FX: preset will-change + transform-style 3d para tilt cards */
+[data-fx="tilt"] {
+    transform-style: preserve-3d;
+    will-change: transform;
+}
+
+/* Marquee sponsors infinito (CSS-only) */
+@keyframes acf-marquee {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+}
+.acf-marquee {
+    display: flex;
+    gap: 4rem;
+    width: max-content;
+    animation: acf-marquee 30s linear infinite;
+}
+.acf-marquee:hover { animation-play-state: paused; }
+
+/* Header con backdrop tras scroll */
+header.sticky.backdrop-blur {
+    background-color: rgba(10, 10, 10, 0.85);
+    backdrop-filter: blur(12px) saturate(160%);
+    -webkit-backdrop-filter: blur(12px) saturate(160%);
+}
+
+/* Cursor pointer en tilt cards */
+[data-fx="tilt"] { cursor: pointer; }
+
 /* Defaults globales para el front público */
 @layer base {
     html { @apply antialiased; }
