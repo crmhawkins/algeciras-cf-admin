@@ -12,6 +12,7 @@ class DatabaseSeeder extends Seeder
             SeasonsSeeder::class,
             ZonesSeeder::class,
             SectorsSeeder::class,
+            SeatsSeeder::class,
             CategoriesSeeder::class,
             PlayersSeeder::class,
             ClubStaffSeeder::class,

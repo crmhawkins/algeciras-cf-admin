@@ -21,6 +21,8 @@ class Sector extends Model
         'meta' => 'array',
     ];
 
+    public function seats() { return $this->hasMany(Seat::class); }
+
     public function scopeAvailable($q) { return $q->where('available', true); }
     public function scopeByZone($q, string $zone) { return $q->where('zone', $zone); }
 
