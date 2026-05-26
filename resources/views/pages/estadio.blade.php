@@ -186,13 +186,19 @@
                 'fondo_norte'  => 'Fondo Norte',
                 'fondo_sur'    => 'Fondo Sur',
             ];
+            $zoneColors = [
+                'tribuna_baja' => '#CF2E2E',
+                'tribuna_alta' => '#CF2E2E',
+                'preferente'   => '#D4A24C',
+                'fondo_norte'  => '#0A0A0A',
+                'fondo_sur'    => '#1A1A1A',
+            ];
         @endphp
         @foreach ($zoneLabels as $zKey => $zLabel)
             @if ($byZone->has($zKey))
                 <div class="mb-10" data-fx="reveal">
                     <h3 class="font-display text-3xl mb-4 flex items-center gap-3">
-                        <span class="inline-block w-6 h-6"
-                              style="background-color: {{ ['tribuna_baja' => '#CF2E2E', 'tribuna_alta' => '#CF2E2E', 'preferente' => '#D4A24C', 'fondo_norte' => '#0A0A0A', 'fondo_sur' => '#1A1A1A'][$zKey] ?? '#999' }}"></span>
+                        <span class="inline-block w-6 h-6" style="background-color: {{ $zoneColors[$zKey] ?? '#999' }}"></span>
                         {{ $zLabel }}
                     </h3>
                     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
