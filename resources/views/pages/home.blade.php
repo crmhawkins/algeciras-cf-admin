@@ -9,6 +9,28 @@
      HERO BRUTAL
      ===================================================== --}}
 <section class="relative bg-algeciras-black text-white overflow-hidden">
+    {{-- Video de fondo "Algecirista" sólo en la zona izquierda (negra), debajo del texto --}}
+    <video id="hero-video" autoplay muted loop playsinline preload="auto"
+           class="absolute inset-y-0 left-0 w-full md:w-2/3 h-full object-cover opacity-50 pointer-events-none"
+           aria-hidden="true">
+        <source src="{{ asset('videos/algecirista.mp4') }}" type="video/mp4">
+    </video>
+    <script>
+        (function() {
+            const v = document.getElementById('hero-video');
+            if (!v) return;
+            const tryPlay = () => v.play().catch(() => {});
+            if (v.readyState >= 2) tryPlay();
+            v.addEventListener('canplay', tryPlay, { once: true });
+            v.addEventListener('loadeddata', tryPlay, { once: true });
+            // Reintentar si Lenis/GSAP pausa
+            setTimeout(tryPlay, 500);
+            setTimeout(tryPlay, 1500);
+        })();
+    </script>
+    {{-- Gradient para legibilidad del texto + fade hacia la zona roja --}}
+    <div class="absolute inset-0 bg-gradient-to-r from-algeciras-black/85 via-algeciras-black/55 to-algeciras-black/0 pointer-events-none"></div>
+
     {{-- Capa de grano + acento rojo lateral --}}
     <div class="absolute inset-0 grano opacity-40 pointer-events-none"></div>
     <div data-fx="hero-layer" data-speed="0.4" class="absolute top-0 right-0 bottom-0 w-1/3 bg-algeciras-red transform skew-x-12 -translate-x-12 opacity-90"></div>
