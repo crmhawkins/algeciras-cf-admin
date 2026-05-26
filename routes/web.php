@@ -9,6 +9,7 @@ Route::get('/calendario',   [PageController::class, 'calendario'])->name('calend
 Route::get('/tienda',       [PageController::class, 'tienda'])->name('tienda');
 Route::get('/tienda/{product:slug}', [PageController::class, 'producto'])->name('producto');
 Route::get('/abonos',       [PageController::class, 'abonos'])->name('abonos');
+Route::get('/estadio',      [\App\Http\Controllers\StadiumController::class, 'index'])->name('estadio');
 Route::get('/actualidad',   [PageController::class, 'actualidad'])->name('actualidad');
 Route::get('/actualidad/{news:slug}', [PageController::class, 'noticia'])->name('noticia');
 Route::get('/club',         [PageController::class, 'club'])->name('club');
