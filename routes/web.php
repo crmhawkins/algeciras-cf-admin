@@ -15,6 +15,7 @@ Route::get('/actualidad',   [PageController::class, 'actualidad'])->name('actual
 Route::get('/actualidad/{news:slug}', [PageController::class, 'noticia'])->name('noticia');
 Route::get('/club',         [PageController::class, 'club'])->name('club');
 Route::get('/contacto',     [PageController::class, 'contacto'])->name('contacto');
+Route::get('/area-personal', fn () => view('pages.area-personal'))->name('area-personal');
 Route::get('/carrito',      fn () => view('pages.carrito'))->name('carrito');
 Route::get('/checkout',     fn () => view('pages.checkout'))->name('checkout');
 Route::get('/pedido/{order:reference}', fn (\App\Models\Order $order) => view('pages.pedido', [
