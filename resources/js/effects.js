@@ -164,14 +164,17 @@ function initFX() {
     }, { threshold: 0, rootMargin: '0px 0px -10% 0px' });
     document.querySelectorAll('[data-fx="counter"]').forEach((el) => observer.observe(el));
 
-    /* === 6. REVEAL ON SCROLL (fade + slide up) === */
+    /* === 6. REVEAL ON SCROLL (fade + slide up) ===
+       immediateRender:false → si el ScrollTrigger no dispara por la razón que sea,
+       el elemento se queda en su estado natural (visible), no en opacity:0 */
     document.querySelectorAll('[data-fx="reveal"]').forEach((el) => {
         gsap.from(el, {
             y: 80,
             opacity: 0,
             duration: 1,
             ease: 'power3.out',
-            scrollTrigger: { trigger: el, start: 'top 85%', once: true },
+            immediateRender: false,
+            scrollTrigger: { trigger: el, start: 'top bottom-=50', once: true },
         });
     });
 
@@ -184,7 +187,8 @@ function initFX() {
             duration: 0.9,
             ease: 'power3.out',
             stagger: 0.1,
-            scrollTrigger: { trigger: group, start: 'top 80%', once: true },
+            immediateRender: false,
+            scrollTrigger: { trigger: group, start: 'top bottom-=20', once: true },
         });
     });
 
@@ -260,6 +264,24 @@ function initFX() {
 
     /* === Refresh ScrollTrigger tras inicializar todo === */
     ScrollTrigger.refresh();
+
+    /* === FAILSAFE: cualquier elemento con opacity:0 atascado, lo dejamos visible tras 4s === */
+    setTimeout(() => {
+        document.querySelectorAll('[data-fx="reveal"], [data-fx="reveal-stagger"]').forEach((el) => {
+            const opacity = parseFloat(getComputedStyle(el).opacity);
+            if (opacity < 0.5) {
+                gsap.to(el, { y: 0, opacity: 1, scale: 1, duration: 0.5, ease: 'power2.out' });
+            }
+            // Para reveal-stagger: revisar también children
+            if (el.dataset.fx === 'reveal-stagger') {
+                [...el.children].forEach((child) => {
+                    if (parseFloat(getComputedStyle(child).opacity) < 0.5) {
+                        gsap.to(child, { y: 0, opacity: 1, scale: 1, duration: 0.5, ease: 'power2.out' });
+                    }
+                });
+            }
+        });
+    }, 4000);
 }
 
 /* ====== Boot ====== */
