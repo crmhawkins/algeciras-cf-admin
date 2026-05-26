@@ -271,11 +271,16 @@
         if (sector.available && sector.color) {
             el.querySelectorAll('polygon, rect, path').forEach((shape) => {
                 shape.setAttribute('fill', sector.color);
+                // Garantizar que los clicks no se traguen los popovers Bootstrap-Vue
+                shape.style.pointerEvents = 'auto';
             });
+            el.style.cursor = 'pointer';
+        } else if (!sector.available) {
+            el.classList.add('no-disponible');
         }
 
-        // Hover → mostrar tooltip
-        el.addEventListener('mouseenter', (e) => {
+        // Hover → mostrar tooltip custom
+        el.addEventListener('mouseenter', () => {
             if (!sector.available) {
                 tooltip.innerHTML = '<div>' + sector.name + '</div><div class="libres">No disponible</div>';
             } else {
@@ -288,20 +293,57 @@
         });
 
         el.addEventListener('mousemove', (e) => {
-            const x = e.clientX + 15;
-            const y = e.clientY + 15;
-            tooltip.style.left = x + 'px';
-            tooltip.style.top = y + 'px';
+            tooltip.style.left = (e.clientX + 15) + 'px';
+            tooltip.style.top  = (e.clientY + 15) + 'px';
         });
 
         el.addEventListener('mouseleave', () => {
             tooltip.classList.remove('visible');
         });
+    });
 
-        // Click → abrir modal
-        el.addEventListener('click', () => {
-            if (!sector.available) return;
-            window.dispatchEvent(new CustomEvent('open-sector', { detail: sector }));
+    // CLICK DELEGADO (al SVG, no a cada <g>) — soluciona el caso en que
+    // el click cae en un <polygon>/<rect>/<path> hijo y no burbujea al <g>.
+    svg.addEventListener('click', (e) => {
+        const target = e.target.closest('[data-region]');
+        if (!target) return;
+        const sector = SECTORS[target.dataset.region];
+        if (!sector || !sector.available) return;
+        // Navegar al detalle de butacas
+        window.location.href = '/estadio/sector/' + sector.svg_region;
+    }, true); // capture: true por si algún tooltip de Bootstrap-Vue intercepta
+
+    // Bonus: tap táctil en móvil → tras 1er tap muestra tooltip, 2º tap navega.
+    // Implementación simple: si es touch device, primer tap previene navegación.
+    if ('ontouchstart' in window) {
+        let lastTouchedRegion = null;
+        svg.addEventListener('touchend', (e) => {
+            const target = e.target.closest('[data-region]');
+            if (!target) return;
+            const region = target.dataset.region;
+            const sector = SECTORS[region];
+            if (!sector || !sector.available) return;
+            if (lastTouchedRegion !== region) {
+                e.preventDefault();
+                lastTouchedRegion = region;
+                // Dispara mouseenter manualmente para mostrar tooltip
+                target.dispatchEvent(new MouseEvent('mouseenter'));
+            } else {
+                window.location.href = '/estadio/sector/' + sector.svg_region;
+            }
+        }, { passive: false });
+    }
+
+    // Actualizar también los botones "O elige por zona" para que vayan a la página de butacas
+    document.querySelectorAll('button[data-sector]').forEach((btn) => {
+        btn.onclick = null;
+        btn.addEventListener('click', () => {
+            try {
+                const data = JSON.parse(btn.dataset.sector);
+                if (data && data.svg_region) {
+                    window.location.href = '/estadio/sector/' + data.svg_region;
+                }
+            } catch (e) { /* ignore */ }
         });
     });
 })();
