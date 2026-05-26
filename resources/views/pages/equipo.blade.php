@@ -82,12 +82,7 @@
                         <div class="absolute inset-0 bg-gradient-to-t from-algeciras-black via-algeciras-black/30 to-transparent pointer-events-none"></div>
                         <div class="absolute top-0 right-0 w-20 h-20 bg-algeciras-red transform rotate-45 translate-x-10 -translate-y-10 group-hover:translate-x-6 group-hover:-translate-y-6 transition-transform duration-500"></div>
 
-                        {{-- Dorsal grande arriba izq --}}
-                        @if ($p->dorsal)
-                            <div class="absolute top-4 left-4 font-display text-4xl lg:text-6xl leading-none text-white drop-shadow-lg group-hover:text-algeciras-red transition" style="line-height: 1; padding-top: 0.1em;">
-                                {{ $p->dorsal }}
-                            </div>
-                        @endif
+                        {{-- Dorsal: ya viene pintado en la foto oficial, no overlayamos otro --}}
 
                         {{-- Nombre abajo --}}
                         <div class="absolute bottom-0 left-0 right-0 p-4 lg:p-5">
