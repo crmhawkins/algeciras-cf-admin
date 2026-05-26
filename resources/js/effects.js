@@ -49,21 +49,27 @@ function init() {
         delay: 0.2,
     });
 
-    /* ============ 2. COUNTER ANIMADO ============ */
-    document.querySelectorAll('[data-fx="counter"]').forEach((el) => {
-        const target = parseInt(el.dataset.value || el.textContent.replace(/\D/g, ''), 10);
-        if (Number.isNaN(target)) return;
-        const suffix = el.dataset.suffix || '';
-        const prefix = el.dataset.prefix || '';
-        const obj = { v: 0 };
-        gsap.to(obj, {
-            v: target,
-            duration: 1.6,
-            ease: 'power2.out',
-            scrollTrigger: { trigger: el, start: 'top 85%', once: true },
-            onUpdate: () => { el.textContent = `${prefix}${Math.round(obj.v)}${suffix}`; },
+    /* ============ 2. COUNTER ANIMADO (IntersectionObserver — más fiable que ScrollTrigger aquí) ============ */
+    const counterObserver = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+            if (!entry.isIntersecting || entry.target.dataset.fxStarted) return;
+            entry.target.dataset.fxStarted = '1';
+            const el = entry.target;
+            const target = parseInt(el.dataset.value || '0', 10);
+            if (Number.isNaN(target) || target === 0) return;
+            const suffix = el.dataset.suffix || '';
+            const prefix = el.dataset.prefix || '';
+            const obj = { v: 0 };
+            gsap.to(obj, {
+                v: target,
+                duration: 1.8,
+                ease: 'power2.out',
+                onUpdate: () => { el.textContent = `${prefix}${Math.round(obj.v)}${suffix}`; },
+            });
         });
-    });
+    }, { threshold: 0.3 });
+
+    document.querySelectorAll('[data-fx="counter"]').forEach((el) => counterObserver.observe(el));
 
     /* ============ 3. REVEAL ON SCROLL ============ */
     // Cualquier elemento con [data-fx="reveal"] se anima al entrar en viewport
