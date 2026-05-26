@@ -231,23 +231,28 @@
     </div>
 </section>
 
+@php
+    $sectorsForJs = $sectors->mapWithKeys(function ($s) {
+        return [$s->svg_region => [
+            'id'          => $s->id,
+            'svg_region'  => $s->svg_region,
+            'name'        => $s->name,
+            'zone'        => $s->zone,
+            'zone_label'  => $s->zone_label,
+            'capacity'    => $s->capacity,
+            'price_adult' => $s->price_adult,
+            'price_youth' => $s->price_youth,
+            'available'   => $s->available,
+            'color'       => $s->color_hex,
+        ]];
+    });
+@endphp
 @push('scripts')
 <script>
 (function() {
     'use strict';
     // Mapping data-region → datos del sector (rendered desde BD)
-    const SECTORS = @json($sectors->keyBy('svg_region')->map(fn($s) => [
-        'id'         => $s->id,
-        'svg_region' => $s->svg_region,
-        'name'       => $s->name,
-        'zone'       => $s->zone,
-        'zone_label' => $s->zone_label,
-        'capacity'   => $s->capacity,
-        'price_adult'=> $s->price_adult,
-        'price_youth'=> $s->price_youth,
-        'available'  => $s->available,
-        'color'      => $s->color_hex,
-    ]));
+    const SECTORS = @json($sectorsForJs);
 
     const tooltip = document.getElementById('stadium-tooltip');
     const svg = document.querySelector('#plano-wrapper svg');
