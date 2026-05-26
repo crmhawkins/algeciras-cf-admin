@@ -63,6 +63,15 @@ class SeatsSeeder extends Seeder
                 continue; // sector virtual (Simpatizantes, Baby, Socio de Honor, etc.)
             }
 
+            // Parsear butacas ocultas (forma trapezoidal/irregular): "row-seat,row-seat,..."
+            $hiddenStr = (string) ($layout['hidden'] ?? '');
+            $hidden    = collect(explode(',', $hiddenStr))
+                ->filter()
+                ->mapWithKeys(function ($pair) {
+                    [$r, $s] = explode('-', trim($pair));
+                    return ["{$r}-{$s}" => true];
+                });
+
             $seatsForSector = collect();
 
             for ($r = 0; $r < $rowsCount; $r++) {
@@ -70,6 +79,12 @@ class SeatsSeeder extends Seeder
                 for ($s = 0; $s < $seatsRow; $s++) {
                     // step SIEMPRE +2 (par/impar según initial_seat)
                     $number = $initialSeat + ($s * 2);
+
+                    // Saltar butacas en la lista de ocultos (sector trapezoidal o con huecos)
+                    if ($hidden->has("{$rowLabel}-{$number}")) {
+                        continue;
+                    }
+
                     $seat = Seat::create([
                         'sector_id' => $sector->id,
                         'row'       => $rowLabel,
