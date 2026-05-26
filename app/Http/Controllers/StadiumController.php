@@ -33,22 +33,33 @@ class StadiumController extends Controller
             ->where('available', true)
             ->firstOrFail();
 
-        $seats = $sector->load([])
-            ->seats ?? collect();
-
-        // Si las butacas no están cargadas en relación, las recuperamos directamente
         $seats = \App\Models\Seat::where('sector_id', $sector->id)
             ->orderBy('row')
             ->orderBy('number')
             ->get();
 
-        $byRow = $seats->groupBy('row');
+        // Leer direction del layout JSON real (1 = L→R, 2 = R→L espejado)
+        $direction = 1;
+        $jsonPath = database_path('data/sectors_layout.json');
+        if (\Illuminate\Support\Facades\File::exists($jsonPath)) {
+            $layout = collect(json_decode(\Illuminate\Support\Facades\File::get($jsonPath), true))
+                ->firstWhere('id', $sector->svg_region);
+            if ($layout) $direction = (int) ($layout['direction'] ?? 1);
+        }
+
+        // Agrupar por fila, ordenar butacas dentro de cada fila según direction
+        $byRow = $seats->groupBy('row')->map(function ($rowSeats) use ($direction) {
+            return $direction === 2
+                ? $rowSeats->sortByDesc('number')->values()
+                : $rowSeats->sortBy('number')->values();
+        });
 
         return view('pages.sector', [
-            'sector' => $sector,
-            'byRow'  => $byRow,
+            'sector'     => $sector,
+            'byRow'      => $byRow,
             'totalSeats' => $seats->count(),
             'freeSeats'  => $seats->where('status', 'free')->count(),
+            'direction'  => $direction,
         ]);
     }
 }

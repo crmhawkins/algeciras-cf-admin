@@ -128,7 +128,7 @@
                 @foreach ($byRow as $row => $seats)
                     <div class="seat-row flex-nowrap min-w-fit">
                         <span class="seat-row-label">{{ $row }}</span>
-                        @foreach ($seats->sortBy('number') as $seat)
+                        @foreach ($seats as $seat)
                             @php
                                 $cls = match ($seat->status) {
                                     'free'     => 'free',

@@ -5,106 +5,98 @@ namespace Database\Seeders;
 use App\Models\Seat;
 use App\Models\Sector;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\File;
 
 /**
- * Generador de butacas para cada sector disponible.
+ * Generador de butacas usando la disposición REAL extraída del API de
+ * compralaentrada.com (vía /api1/f/zonas/{id}?conf=true).
  *
- * Lógica trapezoidal: 7 filas (preferente/fondo) o 14 filas (tribuna),
- * número de asientos por fila crece desde fila 1 hasta la última.
+ * Para cada sector, el sitio oficial expone:
+ *   rows          → número de filas
+ *   seats_row     → butacas por fila (constante en todas las filas)
+ *   initial_row   → primer fila (etiqueta inicial)
+ *   initial_seat  → primer número de butaca
+ *   direction     → 1 (orden ascendente L→R) o 2 (descendente L→R, sector espejado)
  *
- * Numeración: par/impar según el `parity` del sector, partiendo de un
- * offset global por zona + número.
+ * Numeración: SIEMPRE step +2 (par o impar según initial_seat). El estadio
+ * Nuevo Mirador numera todas las gradas en par/impar.
  *
- * Estado: random según ratio capacity/total para reflejar las plazas
- * libres reales del scrape de compralaentrada.com.
+ * Estado: aleatorio según ratio libres/aforo del scrape (refleja plazas
+ * realmente disponibles en el momento del scrape).
  */
 class SeatsSeeder extends Seeder
 {
     public function run(): void
     {
+        $jsonPath = database_path('data/sectors_layout.json');
+
+        if (! File::exists($jsonPath)) {
+            $this->command->error("No se encuentra {$jsonPath}");
+            return;
+        }
+
+        $layouts = json_decode(File::get($jsonPath), true);
+        $layoutsBySvgRegion = collect($layouts)->keyBy('id');
+
         Seat::query()->delete();
 
-        foreach (Sector::available()->get() as $sector) {
-            $config = $this->configForSector($sector);
-            $seats = $this->generateSeats($sector, $config);
+        $totalCreated = 0;
+        $totalSold = 0;
 
-            // Marcar `n` aleatorios como sold para que coincida ~ con capacity (plazas libres)
-            $toBlock = max(0, $seats->count() - $sector->capacity);
-            $blockedIds = $seats->shuffle()->take($toBlock)->pluck('id');
+        foreach (Sector::all() as $sector) {
+            $layout = $layoutsBySvgRegion->get($sector->svg_region);
 
-            if ($blockedIds->isNotEmpty()) {
+            if (! $layout) {
+                $this->command->warn("Sector {$sector->name} (svg_region={$sector->svg_region}) sin layout — omitido.");
+                continue;
+            }
+
+            $rowsCount  = (int) $layout['rows'];
+            $seatsRow   = (int) $layout['seats_row'];
+            $initialRow = (int) $layout['initial_row'];
+            $initialSeat= (int) $layout['initial_seat'];
+            $direction  = (int) ($layout['direction'] ?? 1);
+            $aforo      = (int) ($layout['aforo'] ?? ($rowsCount * $seatsRow));
+            $libres     = (int) ($layout['libres'] ?? $aforo);
+
+            if ($rowsCount === 0 || $seatsRow === 0) {
+                continue; // sector virtual (Simpatizantes, Baby, Socio de Honor, etc.)
+            }
+
+            $seatsForSector = collect();
+
+            for ($r = 0; $r < $rowsCount; $r++) {
+                $rowLabel = $initialRow + $r;
+                for ($s = 0; $s < $seatsRow; $s++) {
+                    // step SIEMPRE +2 (par/impar según initial_seat)
+                    $number = $initialSeat + ($s * 2);
+                    $seat = Seat::create([
+                        'sector_id' => $sector->id,
+                        'row'       => $rowLabel,
+                        'number'    => $number,
+                        'status'    => 'free',
+                    ]);
+                    $seatsForSector->push($seat);
+                    $totalCreated++;
+                }
+            }
+
+            // Marcar como `sold` el ratio que corresponda según `libres/aforo`
+            $toBlock = max(0, $seatsForSector->count() - $libres);
+            if ($toBlock > 0) {
+                $blockedIds = $seatsForSector->shuffle()->take($toBlock)->pluck('id');
                 Seat::whereIn('id', $blockedIds)->update(['status' => 'sold']);
+                $totalSold += $toBlock;
             }
-        }
-    }
 
-    private function configForSector(Sector $sector): array
-    {
-        // Filas según zona
-        $rows = match ($sector->zone) {
-            'tribuna_alta', 'tribuna_baja' => 14,
-            'preferente'                   => 7,
-            'fondo_norte', 'fondo_sur'     => 10,
-            default                        => 7,
-        };
-
-        // Asientos por fila (trapezoidal: primera más corta, última más larga)
-        $minPerRow = match ($sector->zone) {
-            'tribuna_alta', 'tribuna_baja' => 8,
-            'preferente'                   => 10,
-            'fondo_norte', 'fondo_sur'     => 10,
-            default                        => 8,
-        };
-
-        // Offset base de numeración
-        // Estimación: cada zona ocupa un rango, los sectores se reparten
-        $zoneBase = match ($sector->zone) {
-            'tribuna_alta' => 1,    // 1, 31, 61, ... (cada sector +30)
-            'tribuna_baja' => 401,  // 401, 431, ...
-            'preferente'   => 101,  // 101, 131, ...
-            'fondo_norte'  => 601,
-            'fondo_sur'    => 701,
-            default        => 1,
-        };
-        // Sólo tomar number si es numérico (saltar 'A', 'B', null)
-        $sectorNum = is_numeric($sector->number) ? max(1, (int) $sector->number) : 1;
-        $baseSeat = max(1, $zoneBase + ($sectorNum - 1) * 30);
-
-        // Si es par, ajustamos para que el primer asiento sea par
-        if ($sector->parity === 'par' && $baseSeat % 2 !== 0) $baseSeat++;
-        if ($sector->parity === 'impar' && $baseSeat % 2 === 0) $baseSeat++;
-
-        return [
-            'rows'       => $rows,
-            'min_per_row'=> $minPerRow,
-            'base_seat'  => $baseSeat,
-        ];
-    }
-
-    private function generateSeats(Sector $sector, array $config)
-    {
-        $created = collect();
-        $rows = $config['rows'];
-        $minPerRow = $config['min_per_row'];
-        $baseSeat = $config['base_seat'];
-
-        for ($row = 1; $row <= $rows; $row++) {
-            // Cada fila tiene minPerRow + (row-1) asientos (forma trapezoidal hacia atrás)
-            $seatsInRow = $minPerRow + ($row - 1);
-            $step = $sector->parity === 'none' ? 1 : 2;
-
-            for ($i = 0; $i < $seatsInRow; $i++) {
-                $number = $baseSeat + ($i * $step);
-                $seat = Seat::create([
-                    'sector_id' => $sector->id,
-                    'row'       => $row,
-                    'number'    => $number,
-                    'status'    => 'free',
-                ]);
-                $created->push($seat);
-            }
+            $this->command->info(
+                sprintf("✓ %-30s %2d filas × %2d butacas (%3d libres / %3d total) dir=%d",
+                    $sector->name, $rowsCount, $seatsRow, $libres, $aforo, $direction
+                )
+            );
         }
 
-        return $created;
+        $this->command->info("");
+        $this->command->info("Total: {$totalCreated} butacas creadas, {$totalSold} marcadas como sold.");
     }
 }
