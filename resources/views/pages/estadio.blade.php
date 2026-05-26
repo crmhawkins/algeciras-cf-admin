@@ -239,6 +239,8 @@
             'name'        => $s->name,
             'zone'        => $s->zone,
             'zone_label'  => $s->zone_label,
+            'number'      => $s->number,
+            'parity'      => $s->parity,
             'capacity'    => $s->capacity,
             'price_adult' => $s->price_adult,
             'price_youth' => $s->price_youth,
@@ -278,6 +280,49 @@
         } else if (!sector.available) {
             el.classList.add('no-disponible');
         }
+
+        // Insertar etiqueta de número del sector (1-14, A, B) como compralaentrada
+        try {
+            let label = null;
+            if (sector.number !== null && sector.number !== undefined && String(sector.number).trim() !== '') {
+                label = String(sector.number);
+            } else if (sector.zone === 'palco') {
+                // Para palcos sin número, mostrar abreviatura legible
+                label = sector.parity === 'par' ? 'PALCO\nPAR' : 'PALCO\nIMPAR';
+            }
+            if (label !== null) {
+                const bbox = el.getBBox();
+                const cx = bbox.x + bbox.width / 2;
+                const cy = bbox.y + bbox.height / 2;
+                const NS = 'http://www.w3.org/2000/svg';
+                const text = document.createElementNS(NS, 'text');
+                text.setAttribute('x', cx);
+                text.setAttribute('y', cy);
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('dominant-baseline', 'central');
+                // Color: blanco para sectores rojos/oscuros, blanco también para gold
+                text.setAttribute('fill', '#FFFFFF');
+                text.setAttribute('font-size', Math.max(7, Math.min(11, bbox.height * 0.55)));
+                text.setAttribute('font-weight', '700');
+                text.setAttribute('font-family', 'Inter, sans-serif');
+                text.setAttribute('pointer-events', 'none');
+                text.style.userSelect = 'none';
+                // Soporte para multilinea con \n
+                if (label.includes('\n')) {
+                    const parts = label.split('\n');
+                    parts.forEach((line, i) => {
+                        const tspan = document.createElementNS(NS, 'tspan');
+                        tspan.setAttribute('x', cx);
+                        tspan.setAttribute('dy', i === 0 ? -(parts.length - 1) * 0.55 + 'em' : '1.1em');
+                        tspan.textContent = line;
+                        text.appendChild(tspan);
+                    });
+                } else {
+                    text.textContent = label;
+                }
+                el.appendChild(text);
+            }
+        } catch (e) { /* getBBox puede fallar si el elemento aún no se ha layouteado */ }
 
         // Hover → mostrar tooltip custom
         el.addEventListener('mouseenter', () => {
