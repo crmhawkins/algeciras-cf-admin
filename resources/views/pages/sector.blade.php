@@ -31,6 +31,15 @@
         justify-content: center;
         margin-bottom: 6px;
     }
+    .seat-spacer {
+        width: 28px;
+        height: 28px;
+        flex-shrink: 0;
+        display: inline-block;
+    }
+    @media (max-width: 768px) {
+        .seat-spacer { width: 22px; height: 22px; }
+    }
     .seat-row-label {
         display: inline-block;
         width: 24px;
@@ -124,10 +133,24 @@
             </div>
 
             {{-- Grilla butacas --}}
+            @php
+                // Para sectores IMPAR trapezoidales, las filas cortas deben alinearse
+                // a la DERECHA (compralaentrada espeja los sectores del lado derecho
+                // del estadio). Calculamos el máximo de butacas por fila para añadir
+                // "huecos" invisibles a la izquierda de las filas más cortas.
+                $maxSeatsInRow = $byRow->max(fn($r) => $r->count());
+                $rightAlign = $sector->parity === 'impar';
+            @endphp
             <div class="bg-white border-2 border-algeciras-black/10 p-6 overflow-x-auto">
                 @foreach ($byRow as $row => $seats)
+                    @php
+                        $leftSpacers = $rightAlign ? ($maxSeatsInRow - $seats->count()) : 0;
+                    @endphp
                     <div class="seat-row flex-nowrap min-w-fit">
                         <span class="seat-row-label">{{ $row }}</span>
+                        @for ($i = 0; $i < $leftSpacers; $i++)
+                            <span class="seat-spacer" aria-hidden="true"></span>
+                        @endfor
                         @foreach ($seats as $seat)
                             @php
                                 $cls = match ($seat->status) {
