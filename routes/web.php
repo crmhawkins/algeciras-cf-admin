@@ -14,10 +14,17 @@ Route::get('/estadio/sector/{svgRegion}', [\App\Http\Controllers\StadiumControll
 Route::get('/actualidad',   [PageController::class, 'actualidad'])->name('actualidad');
 Route::get('/actualidad/{news:slug}', [PageController::class, 'noticia'])->name('noticia');
 Route::get('/club',         [PageController::class, 'club'])->name('club');
+Route::get('/fanzone',      [PageController::class, 'fanzone'])->name('fanzone');
 Route::get('/contacto',     [PageController::class, 'contacto'])->name('contacto');
-Route::get('/area-personal', fn () => view('pages.area-personal'))->name('area-personal');
+Route::get ('/area-personal',          [\App\Http\Controllers\AreaPersonalController::class, 'index'])->name('area-personal');
+Route::post('/area-personal/login',    [\App\Http\Controllers\AreaPersonalController::class, 'login'])->name('area-personal.login');
+Route::post('/area-personal/register', [\App\Http\Controllers\AreaPersonalController::class, 'register'])->name('area-personal.register');
+Route::post('/area-personal/logout',   [\App\Http\Controllers\AreaPersonalController::class, 'logout'])->name('area-personal.logout');
 Route::get('/carrito',      fn () => view('pages.carrito'))->name('carrito');
 Route::get('/checkout',     fn () => view('pages.checkout'))->name('checkout');
 Route::get('/pedido/{order:reference}', fn (\App\Models\Order $order) => view('pages.pedido', [
     'order' => $order->load('items.product', 'tickets.product', 'tickets.zone', 'customer'),
 ]))->name('pedido');
+
+Route::get('/zona-socio', [PageController::class, 'zonaSocio'])->name('zona-socio');
+Route::get('/zona-socio/{content:slug}', [PageController::class, 'zonaSocioContent'])->name('zona-socio.content');

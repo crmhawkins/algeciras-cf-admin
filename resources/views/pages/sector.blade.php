@@ -241,6 +241,24 @@ function seatPicker(sectorId, sectorName, priceAdult, priceYouth) {
         },
         addToCart() {
             if (this.selected.length === 0) return;
+            const payload = {
+                type: 'cart-add',
+                sectorId: this.sectorId,
+                sectorName: this.sectorName,
+                items: this.selected.map(s => ({ id: s.id, row: s.row, number: s.number, price: this.priceAdult })),
+                total: this.total(),
+            };
+
+            // Si estamos dentro de la app móvil (WebView), notificar al wrapper nativo
+            const isNative = new URLSearchParams(window.location.search).has('native')
+                          || (typeof window.ReactNativeWebView !== 'undefined');
+            if (isNative && window.ReactNativeWebView) {
+                window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+                this.selected = [];
+                return;
+            }
+
+            // Flujo normal web: alert + futuro POST a /carrito/add
             const seats = this.selected.map(s => `Fila ${s.row} · Butaca ${s.number}`).join('\n');
             alert(`Añadidas al carrito ${this.selected.length} butacas de ${this.sectorName}:\n\n${seats}\n\nTotal: ${this.total().toFixed(2).replace('.',',')}€\n\n(Próximamente integración real con CartService.)`);
             this.selected = [];

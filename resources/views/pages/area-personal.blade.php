@@ -28,11 +28,18 @@
             <p class="font-mono text-algeciras-red text-xs tracking-[0.4em] uppercase mb-2">Iniciar sesión</p>
             <h2 class="font-display text-4xl lg:text-5xl mb-8">Accede a tu cuenta</h2>
 
-            <form action="#" method="POST" class="space-y-5">
+            @if ($errors->any())
+                <div class="mb-4 p-4 bg-algeciras-red/10 border-l-4 border-algeciras-red">
+                    @foreach ($errors->all() as $error)
+                        <p class="text-sm text-algeciras-red font-medium">{{ $error }}</p>
+                    @endforeach
+                </div>
+            @endif
+            <form action="{{ route('area-personal.login') }}" method="POST" class="space-y-5">
                 @csrf
                 <div>
-                    <label for="email" class="block font-display tracking-widest uppercase text-xs mb-2">Email o número de socio</label>
-                    <input type="text" name="email" id="email" required
+                    <label for="email" class="block font-display tracking-widest uppercase text-xs mb-2">Email</label>
+                    <input type="email" name="email" id="email" required value="{{ old('email') }}"
                            class="w-full px-4 py-3 border-2 border-algeciras-black/10 focus:border-algeciras-red focus:outline-none transition font-mono"
                            placeholder="socio@ejemplo.com">
                 </div>
@@ -51,18 +58,10 @@
                     <a href="#" class="text-algeciras-red hover:underline font-display tracking-wider uppercase text-xs">¿Olvidaste tu contraseña?</a>
                 </div>
 
-                <button type="submit" disabled
-                        class="w-full px-6 py-4 bg-algeciras-red text-white font-display tracking-widest uppercase shadow-brutal opacity-60 cursor-not-allowed">
+                <button type="submit"
+                        class="w-full px-6 py-4 bg-algeciras-red hover:bg-algeciras-red-dark text-white font-display tracking-widest uppercase shadow-brutal hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition">
                     Entrar →
                 </button>
-
-                <div class="text-center mt-4 p-4 bg-algeciras-cream border-l-4 border-algeciras-red">
-                    <p class="text-sm text-algeciras-black/70">
-                        <strong>🚧 Área en construcción.</strong><br>
-                        El acceso para socios estará operativo en los próximos días.
-                        Mientras tanto, hazte abonado o consulta el calendario.
-                    </p>
-                </div>
             </form>
 
             <hr class="my-8 border-algeciras-black/10">

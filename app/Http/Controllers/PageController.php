@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ClubStaff;
+use App\Models\ExclusiveContent;
 use App\Models\FootballMatch;
 use App\Models\News;
 use App\Models\Player;
@@ -91,5 +92,59 @@ class PageController extends Controller
     public function contacto()
     {
         return view('pages.contacto');
+    }
+
+    /**
+     * FanZone — pantalla web equivalente a la app móvil.
+     * Voto MVP del partido activo (último jugado o próximo) + historial.
+     */
+    public function fanzone()
+    {
+        // Partido activo: priorizamos el último FINALIZADO en los últimos 7 días.
+        // Si no hay, cogemos el próximo programado.
+        $matchActivo = FootballMatch::query()
+            ->where('status', 'finished')
+            ->where('kickoff_at', '>=', now()->subDays(7))
+            ->orderByDesc('kickoff_at')
+            ->first()
+            ?? FootballMatch::upcoming()->first();
+
+        // Plantilla disponible para votar (excluye cuerpo técnico)
+        $jugadores = Player::active()
+            ->whereIn('position', ['portero','defensa','centrocampista','delantero'])
+            ->orderBy('dorsal')
+            ->get();
+
+        // Partidos finalizados con historial (los pillará la API en JS)
+        $partidosFinalizados = FootballMatch::finished()->take(6)->get();
+
+        return view('pages.fanzone', [
+            'matchActivo'         => $matchActivo,
+            'jugadores'           => $jugadores,
+            'partidosFinalizados' => $partidosFinalizados,
+        ]);
+    }
+
+    public function zonaSocio()
+    {
+        // PLACEHOLDER: el control de acceso real llegará con Fase 1 (middleware auth:socio).
+        // Por ahora hardcodeamos $isSocio = true para que se vea el grid de contenidos.
+        $isSocio = true;
+
+        $contents = $isSocio
+            ? ExclusiveContent::published()->orderByDesc('publish_at')->get()
+            : collect();
+
+        return view('pages.zona-socio', compact('isSocio', 'contents'));
+    }
+
+    public function zonaSocioContent(ExclusiveContent $content)
+    {
+        // PLACEHOLDER: cuando Fase 1 esté lista, aquí va el middleware auth:socio.
+        $isSocio = true;
+
+        abort_unless($content->is_published, 404);
+
+        return view('pages.zona-socio-content', compact('isSocio', 'content'));
     }
 }

@@ -38,8 +38,10 @@
                     ['label' => 'Equipo',     'route' => 'equipo'],
                     ['label' => 'Calendario', 'route' => 'calendario'],
                     ['label' => 'Actualidad', 'route' => 'actualidad'],
+                    ['label' => 'FanZone',    'route' => 'fanzone'],
                     ['label' => 'Tienda',     'route' => 'tienda'],
                     ['label' => 'Entradas',   'route' => 'tienda', 'params' => ['type' => 'entrada']],
+                    ['label' => 'Zona Socio', 'route' => 'zona-socio'],
                 ];
             @endphp
 
