@@ -78,13 +78,13 @@
 
         {{-- COLUMNA IZQUIERDA: foto + info zona --}}
         <aside class="lg:col-span-2 lg:sticky lg:top-24 lg:self-start space-y-5">
-            <div class="relative aspect-[4/3] bg-algeciras-black overflow-hidden">
-                <img src="{{ asset('img/club/escudo.png') }}" alt="Vista zona" class="w-full h-full object-contain opacity-30 absolute inset-0">
+            <div class="relative bg-algeciras-black overflow-hidden" style="height: 110px;">
+                <img src="{{ asset('img/club/escudo.png') }}" alt="Vista zona" class="w-full h-full object-contain opacity-25 absolute inset-0">
                 <div class="absolute inset-0 bg-gradient-to-br from-algeciras-black/60 to-algeciras-red/40"></div>
-                <div class="absolute bottom-0 left-0 right-0 p-6 text-white">
-                    <p class="font-mono text-xs uppercase tracking-[0.3em] text-algeciras-red mb-1">Vista del sector</p>
-                    <p class="font-display text-2xl">{{ $sector->zone_label }}</p>
-                    <p class="text-sm opacity-80">Sector {{ ucfirst($sector->parity) }} {{ $sector->number }}</p>
+                <div class="absolute inset-0 flex flex-col justify-center p-4 text-white">
+                    <p class="font-mono text-[10px] uppercase tracking-[0.3em] text-algeciras-red mb-1">Vista del sector</p>
+                    <p class="font-display text-xl leading-tight">{{ $sector->zone_label }}</p>
+                    <p class="text-xs opacity-80">Sector {{ ucfirst($sector->parity) }} {{ $sector->number }}</p>
                 </div>
             </div>
 
