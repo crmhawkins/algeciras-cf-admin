@@ -164,13 +164,12 @@ function initFX() {
     }, { threshold: 0, rootMargin: '0px 0px -10% 0px' });
     document.querySelectorAll('[data-fx="counter"]').forEach((el) => observer.observe(el));
 
-    /* === 6. REVEAL ON SCROLL (fade + slide up) ===
-       immediateRender:false → si el ScrollTrigger no dispara por la razón que sea,
-       el elemento se queda en su estado natural (visible), no en opacity:0 */
+    /* === 6. REVEAL ON SCROLL (slide up, SIN opacity initial) ===
+       Sin opacity:0 inicial → aunque el ScrollTrigger nunca dispare, el elemento
+       siempre se ve. El efecto se reduce a un slide vertical suave, no fade. */
     document.querySelectorAll('[data-fx="reveal"]').forEach((el) => {
         gsap.from(el, {
-            y: 80,
-            opacity: 0,
+            y: 60,
             duration: 1,
             ease: 'power3.out',
             immediateRender: false,
@@ -178,15 +177,14 @@ function initFX() {
         });
     });
 
-    /* === 7. REVEAL STAGGER (grupos) === */
+    /* === 7. REVEAL STAGGER (grupos, SIN opacity initial) === */
     document.querySelectorAll('[data-fx="reveal-stagger"]').forEach((group) => {
         gsap.from(group.children, {
-            y: 60,
-            opacity: 0,
-            scale: 0.95,
+            y: 50,
+            scale: 0.96,
             duration: 0.9,
             ease: 'power3.out',
-            stagger: 0.1,
+            stagger: 0.08,
             immediateRender: false,
             scrollTrigger: { trigger: group, start: 'top bottom-=20', once: true },
         });
