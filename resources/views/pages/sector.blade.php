@@ -145,6 +145,7 @@
                 $layout = collect(json_decode($layoutJson, true))->firstWhere('id', $sector->svg_region);
                 $seatsRow = (int) ($layout['seats_row'] ?? $byRow->max(fn($r) => $r->count()));
                 $initialSeat = (int) ($layout['initial_seat'] ?? 1);
+                $direction = (int) ($layout['direction'] ?? 1);
                 $isImpar = $sector->parity === 'impar';
                 $rowsList = $byRow->keys()->sort()->values();
             @endphp
@@ -158,11 +159,15 @@
                             $number = $initialSeat + $col * 2;
                             $cells[] = ['number' => $number, 'seat' => $seatsThisRow->get($number)];
                         }
-                        // Para IMPAR (lado opuesto del estadio), movemos los spacers
-                        // del FINAL al INICIO para que las butacas visibles queden
-                        // alineadas a la derecha (espejo de compralaentrada). Los
-                        // números siguen ascendentes L→R dentro del bloque visible.
-                        if ($isImpar) {
+                        // Para sectores con direction=2 (lado opuesto del estadio),
+                        // compralaentrada renderiza las butacas en orden DESCENDENTE
+                        // L→R (verificado contra `configuracion` del API live). Invertimos.
+                        if ($direction === 2) {
+                            $cells = array_reverse($cells);
+                        } elseif ($isImpar) {
+                            // direction=1 + IMPAR trapezoidal (PREF IMPAR 14, TA IMPAR 9,
+                            // TA IMPAR 10): movemos los spacers FINAL al INICIO para que
+                            // las visibles queden right-aligned, ascendentes en L→R.
                             $trailingSpacers = 0;
                             for ($i = count($cells) - 1; $i >= 0 && !$cells[$i]['seat']; $i--) {
                                 $trailingSpacers++;
