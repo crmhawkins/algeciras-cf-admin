@@ -66,8 +66,9 @@ class SeatsSeeder extends Seeder
             'fondo_sur'    => 701,
             default        => 1,
         };
-        $sectorNum = (int) ($sector->number ?: 1);
-        $baseSeat = $zoneBase + ($sectorNum - 1) * 30;
+        // Sólo tomar number si es numérico (saltar 'A', 'B', null)
+        $sectorNum = is_numeric($sector->number) ? max(1, (int) $sector->number) : 1;
+        $baseSeat = max(1, $zoneBase + ($sectorNum - 1) * 30);
 
         // Si es par, ajustamos para que el primer asiento sea par
         if ($sector->parity === 'par' && $baseSeat % 2 !== 0) $baseSeat++;
