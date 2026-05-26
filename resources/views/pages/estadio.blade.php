@@ -203,16 +203,20 @@
                     </h3>
                     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                         @foreach ($byZone->get($zKey)->sortBy('parity')->sortBy('number')->where('available', true) as $s)
+                            @php
+                                $sectorData = [
+                                    'id'          => $s->id,
+                                    'svg_region'  => $s->svg_region,
+                                    'name'        => $s->name,
+                                    'zone_label'  => $s->zone_label,
+                                    'capacity'    => $s->capacity,
+                                    'price_adult' => $s->price_adult,
+                                    'price_youth' => $s->price_youth,
+                                ];
+                            @endphp
                             <button type="button"
-                                    onclick="window.dispatchEvent(new CustomEvent('open-sector', {detail: {{ json_encode([
-                                        'id' => $s->id,
-                                        'svg_region' => $s->svg_region,
-                                        'name' => $s->name,
-                                        'zone_label' => $s->zone_label,
-                                        'capacity' => $s->capacity,
-                                        'price_adult' => $s->price_adult,
-                                        'price_youth' => $s->price_youth,
-                                    ]) }}}))"
+                                    data-sector='@json($sectorData)'
+                                    onclick="window.dispatchEvent(new CustomEvent('open-sector', {detail: JSON.parse(this.dataset.sector)}))"
                                     class="bg-white p-3 hover:bg-algeciras-red hover:text-white transition border-2 border-algeciras-black/10 text-left group">
                                 <p class="font-display text-sm uppercase tracking-wider">{{ $s->name }}</p>
                                 <p class="text-xs text-algeciras-gray group-hover:text-white/80 mt-1">
