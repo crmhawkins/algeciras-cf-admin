@@ -38,6 +38,20 @@
     will-change: transform;
 }
 
+/* Lenis smooth scroll — desactiva el scroll nativo para que GSAP/Lenis gestione */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-stopped { overflow: hidden; }
+.lenis.lenis-smooth iframe { pointer-events: none; }
+
+/* image-reveal: contenedor oculta overflow para que la imagen interna pueda escalar suave */
+[data-fx="image-reveal"] { overflow: hidden; }
+[data-fx="image-reveal"] img { will-change: transform; }
+
+/* zoom-scroll prep */
+[data-fx="zoom-scroll"] { will-change: transform; }
+
 /* Marquee sponsors infinito (CSS-only) */
 @keyframes acf-marquee {
     from { transform: translateX(0); }

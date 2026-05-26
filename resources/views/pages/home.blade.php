@@ -11,8 +11,8 @@
 <section class="relative bg-algeciras-black text-white overflow-hidden">
     {{-- Capa de grano + acento rojo lateral --}}
     <div class="absolute inset-0 grano opacity-40 pointer-events-none"></div>
-    <div class="absolute top-0 right-0 bottom-0 w-1/3 bg-algeciras-red transform skew-x-12 -translate-x-12 opacity-90"></div>
-    <div class="absolute top-0 right-0 bottom-0 w-1/4 bg-algeciras-red-dark transform skew-x-12 translate-x-32"></div>
+    <div data-fx="hero-layer" data-speed="0.4" class="absolute top-0 right-0 bottom-0 w-1/3 bg-algeciras-red transform skew-x-12 -translate-x-12 opacity-90"></div>
+    <div data-fx="hero-layer" data-speed="0.7" class="absolute top-0 right-0 bottom-0 w-1/4 bg-algeciras-red-dark transform skew-x-12 translate-x-32"></div>
 
     <div class="relative container mx-auto px-4 lg:px-8 py-20 lg:py-32 grid lg:grid-cols-12 gap-10 items-center">
         <div class="lg:col-span-7 z-10" data-fx="hero-text">
@@ -93,7 +93,7 @@
     <div class="flex items-end justify-between mb-12 flex-wrap gap-4" data-fx="reveal">
         <div>
             <p class="font-mono text-algeciras-red text-sm tracking-[0.4em] uppercase mb-2">Tienda oficial</p>
-            <h2 class="font-display text-6xl">Vístete del escudo</h2>
+            <h2 class="font-display text-6xl" data-fx="title-slide">Vístete del escudo</h2>
         </div>
         <a href="{{ route('tienda') }}" class="font-display tracking-widest uppercase text-sm border-b-2 border-algeciras-red hover:border-algeciras-black">Ver todo →</a>
     </div>
@@ -128,16 +128,16 @@
         <div class="flex items-end justify-between mb-12 flex-wrap gap-4" data-fx="reveal">
             <div>
                 <p class="font-mono text-algeciras-red text-sm tracking-[0.4em] uppercase mb-2">Lo más buscado</p>
-                <h2 class="font-display text-6xl">Productos destacados</h2>
+                <h2 class="font-display text-6xl" data-fx="title-slide">Productos destacados</h2>
             </div>
             <a href="{{ route('tienda', ['type' => 'merch']) }}" class="font-display tracking-widest uppercase text-sm border-b-2 border-algeciras-red hover:border-algeciras-black">Ver todos →</a>
         </div>
         <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6" data-fx="reveal-stagger">
             @foreach ($featured as $p)
                 <a href="{{ route('producto', $p->slug) }}" data-fx="tilt" class="group bg-white block hover:shadow-brutal transition">
-                    <div class="aspect-square bg-algeciras-bone overflow-hidden">
+                    <div class="aspect-square bg-algeciras-bone overflow-hidden" data-fx="image-reveal">
                         @if ($p->image)
-                            <img src="{{ asset($p->image) }}" alt="{{ $p->getTranslation('name','es') }}" data-fx="zoom-in" class="w-full h-full object-contain p-8 group-hover:scale-110 transition duration-500">
+                            <img src="{{ asset($p->image) }}" alt="{{ $p->getTranslation('name','es') }}" class="w-full h-full object-contain p-8 group-hover:scale-110 transition duration-500">
                         @endif
                     </div>
                     <div class="p-4">
@@ -159,14 +159,14 @@
         <div class="flex items-end justify-between mb-12 flex-wrap gap-4" data-fx="reveal">
             <div>
                 <p class="font-mono text-algeciras-red text-sm tracking-[0.4em] uppercase mb-2">Actualidad</p>
-                <h2 class="font-display text-6xl">Lo último del club</h2>
+                <h2 class="font-display text-6xl" data-fx="title-slide">Lo último del club</h2>
             </div>
             <a href="{{ route('actualidad') }}" class="font-display tracking-widest uppercase text-sm border-b-2 border-algeciras-red hover:border-white">Ver todas →</a>
         </div>
         <div class="grid md:grid-cols-3 gap-6" data-fx="reveal-stagger">
             @for ($i = 1; $i <= 3; $i++)
                 <article data-fx="tilt" class="bg-algeciras-ash hover:bg-algeciras-red transition group cursor-pointer">
-                    <div class="aspect-[4/3] bg-gradient-to-br from-algeciras-red/40 to-algeciras-black flex items-center justify-center overflow-hidden">
+                    <div class="aspect-[4/3] bg-gradient-to-br from-algeciras-red/40 to-algeciras-black flex items-center justify-center overflow-hidden" data-fx="image-reveal">
                         <img src="{{ asset('img/club/escudo.png') }}" alt="" class="h-24 w-auto opacity-30 group-hover:opacity-60 transition group-hover:scale-110 duration-500">
                     </div>
                     <div class="p-6">
