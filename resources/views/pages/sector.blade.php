@@ -28,7 +28,7 @@
     .seat-row {
         display: flex;
         gap: 5px;
-        justify-content: center;
+        justify-content: flex-start;
         margin-bottom: 6px;
     }
     .seat-spacer {
@@ -134,41 +134,71 @@
 
             {{-- Grilla butacas --}}
             @php
-                // Para sectores IMPAR trapezoidales, las filas cortas deben alinearse
-                // a la DERECHA (compralaentrada espeja los sectores del lado derecho
-                // del estadio). Calculamos el máximo de butacas por fila para añadir
-                // "huecos" invisibles a la izquierda de las filas más cortas.
-                $maxSeatsInRow = $byRow->max(fn($r) => $r->count());
-                $rightAlign = $sector->parity === 'impar';
+                // Estrategia 1:1 con compralaentrada:
+                // - Iteramos las seats_row columnas teóricas del sector (0..seats_row-1).
+                // - Para cada columna calculamos el número de butaca (initial_seat + col*2).
+                // - Si la butaca existe en BD (no oculta): renderiza botón visible.
+                // - Si no existe: renderiza spacer invisible (preserva la columna).
+                // - Para sectores IMPAR (lado opuesto del estadio), reflejamos el orden
+                //   horizontalmente para alinearlos a la derecha como compralaentrada.
+                $layoutJson = \Illuminate\Support\Facades\File::get(database_path('data/sectors_layout.json'));
+                $layout = collect(json_decode($layoutJson, true))->firstWhere('id', $sector->svg_region);
+                $seatsRow = (int) ($layout['seats_row'] ?? $byRow->max(fn($r) => $r->count()));
+                $initialSeat = (int) ($layout['initial_seat'] ?? 1);
+                $isImpar = $sector->parity === 'impar';
+                $rowsList = $byRow->keys()->sort()->values();
             @endphp
             <div class="bg-white border-2 border-algeciras-black/10 p-6 overflow-x-auto">
-                @foreach ($byRow as $row => $seats)
+                @foreach ($rowsList as $row)
                     @php
-                        $leftSpacers = $rightAlign ? ($maxSeatsInRow - $seats->count()) : 0;
+                        $seatsThisRow = $byRow->get($row)->keyBy('number');
+                        // Generamos el array de "celdas" [col0..colN-1]
+                        $cells = [];
+                        for ($col = 0; $col < $seatsRow; $col++) {
+                            $number = $initialSeat + $col * 2;
+                            $cells[] = ['number' => $number, 'seat' => $seatsThisRow->get($number)];
+                        }
+                        // Para IMPAR (lado opuesto del estadio), movemos los spacers
+                        // del FINAL al INICIO para que las butacas visibles queden
+                        // alineadas a la derecha (espejo de compralaentrada). Los
+                        // números siguen ascendentes L→R dentro del bloque visible.
+                        if ($isImpar) {
+                            $trailingSpacers = 0;
+                            for ($i = count($cells) - 1; $i >= 0 && !$cells[$i]['seat']; $i--) {
+                                $trailingSpacers++;
+                            }
+                            if ($trailingSpacers > 0) {
+                                $spacers = array_slice($cells, -$trailingSpacers);
+                                $rest    = array_slice($cells, 0, -$trailingSpacers);
+                                $cells   = array_merge($spacers, $rest);
+                            }
+                        }
                     @endphp
                     <div class="seat-row flex-nowrap min-w-fit">
                         <span class="seat-row-label">{{ $row }}</span>
-                        @for ($i = 0; $i < $leftSpacers; $i++)
-                            <span class="seat-spacer" aria-hidden="true"></span>
-                        @endfor
-                        @foreach ($seats as $seat)
-                            @php
-                                $cls = match ($seat->status) {
-                                    'free'     => 'free',
-                                    'sold'     => 'sold',
-                                    'reserved' => 'reserved',
-                                    default    => 'blocked',
-                                };
-                            @endphp
-                            <button
-                                type="button"
-                                class="seat {{ $cls }}"
-                                :class="isSelected({{ $seat->id }}) && 'selected'"
-                                @if ($seat->status === 'free') @click="toggle({ id: {{ $seat->id }}, row: {{ $seat->row }}, number: {{ $seat->number }} })" @endif
-                                title="Fila {{ $seat->row }} · Butaca {{ $seat->number }}"
-                                {{ $seat->status !== 'free' ? 'disabled' : '' }}>
-                                {{ $seat->number }}
-                            </button>
+                        @foreach ($cells as $cell)
+                            @if ($cell['seat'])
+                                @php
+                                    $seat = $cell['seat'];
+                                    $cls = match ($seat->status) {
+                                        'free'     => 'free',
+                                        'sold'     => 'sold',
+                                        'reserved' => 'reserved',
+                                        default    => 'blocked',
+                                    };
+                                @endphp
+                                <button
+                                    type="button"
+                                    class="seat {{ $cls }}"
+                                    :class="isSelected({{ $seat->id }}) && 'selected'"
+                                    @if ($seat->status === 'free') @click="toggle({ id: {{ $seat->id }}, row: {{ $seat->row }}, number: {{ $seat->number }} })" @endif
+                                    title="Fila {{ $seat->row }} · Butaca {{ $seat->number }}"
+                                    {{ $seat->status !== 'free' ? 'disabled' : '' }}>
+                                    {{ $seat->number }}
+                                </button>
+                            @else
+                                <span class="seat-spacer" aria-hidden="true"></span>
+                            @endif
                         @endforeach
                     </div>
                 @endforeach
