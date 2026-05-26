@@ -84,7 +84,7 @@
 
                         {{-- Dorsal grande arriba izq --}}
                         @if ($p->dorsal)
-                            <div class="absolute top-3 left-3 font-display text-5xl lg:text-7xl text-white drop-shadow-lg group-hover:text-algeciras-red transition">
+                            <div class="absolute top-4 left-4 font-display text-4xl lg:text-6xl leading-none text-white drop-shadow-lg group-hover:text-algeciras-red transition" style="line-height: 1; padding-top: 0.1em;">
                                 {{ $p->dorsal }}
                             </div>
                         @endif
