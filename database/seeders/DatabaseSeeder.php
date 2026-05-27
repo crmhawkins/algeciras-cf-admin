@@ -21,6 +21,9 @@ class DatabaseSeeder extends Seeder
             MerchSeeder::class,
             ProductVariantsSeeder::class,
             MatchesSeeder::class,
+            // Demo socio: cupones + usuario de prueba con compras y tickets.
+            CouponsSeeder::class,
+            SocioDemoSeeder::class,
         ]);
     }
 }

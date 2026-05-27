@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\FanzoneController;
 use App\Http\Controllers\Api\MyAccountController;
 use App\Http\Controllers\Api\PublicController;
+use App\Http\Controllers\Api\SocioController;
 use App\Http\Controllers\Api\StadiumApiController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -103,6 +104,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get ('/entradas/usuario/{id}', [MyAccountController::class, 'entradasUsuario'])->whereNumber('id');
     Route::post('/abonos/liberar',        [MyAccountController::class, 'liberarAbono']);
     Route::get ('/me/orders',             [MyAccountController::class, 'misPedidos']);
+
+    // Cupones, preferencias notificaciones, actividad
+    Route::get ('/socio/cupones',                [SocioController::class, 'cupones']);
+    Route::post('/socio/cupones/{id}/canjear',   [SocioController::class, 'canjearCupon'])->whereNumber('id');
+    Route::get ('/socio/notificaciones',         [SocioController::class, 'notificaciones']);
+    Route::put ('/socio/notificaciones',         [SocioController::class, 'actualizarNotificaciones']);
+    Route::get ('/socio/actividad',              [SocioController::class, 'actividad']);
 });
 
 /*

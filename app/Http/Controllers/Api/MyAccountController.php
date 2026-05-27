@@ -34,7 +34,7 @@ class MyAccountController extends Controller
         $abonos = Ticket::query()
             ->where('customer_id', $customer->id)
             ->whereHas('product', fn ($q) => $q->where('type', 'abono'))
-            ->with(['product', 'zone', 'order'])
+            ->with(['product', 'zone'])
             ->orderByDesc('created_at')
             ->get()
             ->map(fn (Ticket $t) => $this->serializeTicket($t, 'abono'));
@@ -55,7 +55,7 @@ class MyAccountController extends Controller
         $entradas = Ticket::query()
             ->where('customer_id', $customer->id)
             ->whereHas('product', fn ($q) => $q->where('type', 'entrada'))
-            ->with(['product', 'zone', 'order'])
+            ->with(['product', 'zone'])
             ->orderByDesc('created_at')
             ->get()
             ->map(fn (Ticket $t) => $this->serializeTicket($t, 'entrada'));
@@ -123,11 +123,11 @@ class MyAccountController extends Controller
                 'price' => $t->product?->price,
             ],
             'zona'      => $t->zone ? ['id' => $t->zone->id, 'name' => $t->zone->name] : null,
-            'fila'      => $t->row,
-            'butaca'    => $t->seat_number,
-            'qr'        => $t->qr_code,
+            'fila'      => $t->row ?? null,
+            'butaca'    => $t->seat_number ?? $t->seat ?? null,
+            'qr'        => $t->qr_token ?? $t->qr_code ?? $t->uuid ?? null,
             'createdAt' => $t->created_at?->toIso8601String(),
-            'orderRef'  => $t->order?->reference,
+            'orderRef'  => null, // Ticket no tiene relación order directa
         ];
     }
 }

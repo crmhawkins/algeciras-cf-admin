@@ -226,10 +226,55 @@ class AuthController extends Controller
 
     /**
      * Serializa el User+Customer en una sola estructura para la app y la web.
+     * Incluye `tier`, counts de abonos/entradas/compras/cupones y, si aplica,
+     * un payload `matchday` con la información para el día de partido.
      */
     private function serializeUser(User $user): array
     {
         $customer = $user->customer;
+
+        // Counts agregados para los atajos del área Mi Cuenta
+        $counts = $customer ? [
+            'abonos'   => $customer->tickets()->whereHas('product', fn ($q) => $q->where('type', 'abono'))->count(),
+            'entradas' => $customer->tickets()->whereHas('product', fn ($q) => $q->where('type', 'entrada'))->count(),
+            'compras'  => $customer->orders()->count(),
+            'cupones'  => $customer->customerCoupons()->where('status', 'available')->count(),
+            'votosMvp' => $customer->mvpVotes()->count(),
+            'asistencias' => $customer->matchAttendances()->count(),
+        ] : ['abonos'=>0,'entradas'=>0,'compras'=>0,'cupones'=>0,'votosMvp'=>0,'asistencias'=>0];
+
+        // Matchday — sólo se incluye en el payload si HOY hay partido en casa
+        // y el customer tiene algo asociado. Estructura plana (no SVG entero
+        // del QR para no inflar el JSON: la app móvil pinta el QR a partir
+        // del `qrPayload`).
+        $matchday = null;
+        if ($customer) {
+            try {
+                $service = app(\App\Services\MatchdayService::class);
+                if ($service->isMatchday()) {
+                    $banner = $service->matchdayBannerFor($customer);
+                    if ($banner && $banner['match']) {
+                        $matchday = [
+                            'matchId'   => $banner['match']->id,
+                            'opponent'  => $banner['match']->opponent,
+                            'kickoff'   => optional($banner['match']->kickoff_at)->toIso8601String(),
+                            'venue'     => $banner['match']->venue,
+                            'stadium'   => $banner['match']->stadium,
+                            'matchday'  => $banner['match']->matchday,
+                            'isAbono'   => $banner['isAbono'],
+                            'hasTicket' => $banner['hasTicket'],
+                            'sector'    => $banner['sector'],
+                            'row'       => $banner['row'],
+                            'seat'      => $banner['seat'],
+                            'qr'        => $banner['qrPayload'], // URL para pintar el QR en la app
+                        ];
+                    }
+                }
+            } catch (\Throwable $e) {
+                $matchday = null;
+            }
+        }
+
         return [
             'id'           => $user->id,
             'name'         => $user->name,
@@ -238,22 +283,29 @@ class AuthController extends Controller
             'isSocio'      => (bool) ($customer?->is_socio ?? false),
             'socioNumber'  => $customer?->socio_number,
             'lastLoginAt'  => $user->last_login_at?->toIso8601String(),
+            'tier'         => $customer?->tier ?? 'aficionado',
+            'tierLabel'    => $customer?->tier_label ?? 'Aficionado',
+            'counts'       => $counts,
+            'matchday'     => $matchday,
             'customer'     => $customer ? [
-                'id'         => $customer->id,
-                'firstName'  => $customer->first_name,
-                'lastName'   => $customer->last_name,
-                'phone'      => $customer->phone,
-                'dni'        => $customer->dni,
-                'birthDate'  => $customer->birth_date?->toDateString(),
-                'address'    => $customer->address,
-                'city'       => $customer->city,
-                'province'   => $customer->province,
-                'postalCode' => $customer->postal_code,
-                'country'    => $customer->country,
-                'isSocio'    => (bool) $customer->is_socio,
-                'socioNumber'=> $customer->socio_number,
-                'socioSince' => $customer->socio_since?->toDateString(),
-                'language'   => $customer->language,
+                'id'             => $customer->id,
+                'firstName'      => $customer->first_name,
+                'lastName'       => $customer->last_name,
+                'phone'          => $customer->phone,
+                'dni'            => $customer->dni,
+                'birthDate'      => $customer->birth_date?->toDateString(),
+                'address'        => $customer->address,
+                'city'           => $customer->city,
+                'province'       => $customer->province,
+                'postalCode'     => $customer->postal_code,
+                'country'        => $customer->country,
+                'isSocio'        => (bool) $customer->is_socio,
+                'socioNumber'    => $customer->socio_number,
+                'socioSince'     => $customer->socio_since?->toDateString(),
+                'language'       => $customer->language,
+                'tier'           => $customer->tier,
+                'tierLabel'      => $customer->tier_label,
+                'attendanceRate' => $customer->attendance_rate,
             ] : null,
         ];
     }
