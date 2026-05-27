@@ -168,7 +168,8 @@ class AreaPersonalController extends Controller
         $votosMvp = 0;
 
         if ($customer) {
-            $tickets = $customer->tickets()->with('product', 'zone', 'order')->get();
+            // Ticket no tiene relación `order` directa (va por orderItem). Cargamos solo lo necesario.
+            $tickets = $customer->tickets()->with('product', 'zone')->get();
             $abonos   = $tickets->filter(fn ($t) => optional($t->product)->type === 'abono');
             $entradas = $tickets->filter(fn ($t) => optional($t->product)->type === 'entrada');
             $cuponesDisponibles = $customer->customerCoupons()->where('status', 'available')->count();
