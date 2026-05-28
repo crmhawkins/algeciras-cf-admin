@@ -17,6 +17,8 @@ class DatabaseSeeder extends Seeder
             PlayersSeeder::class,
             ClubStaffSeeder::class,
             SponsorsSeeder::class,
+            SponsorsRealSeeder::class,
+            NewsRealSeeder::class,
             ProductsSeeder::class,
             MerchSeeder::class,
             ProductVariantsSeeder::class,
