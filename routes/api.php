@@ -80,6 +80,9 @@ Route::get('/gradas',    [StadiumApiController::class, 'gradas']);
 Route::get('/sectores',  [StadiumApiController::class, 'sectores']);
 Route::get('/asientos',  [StadiumApiController::class, 'asientos']);
 
+// Clasificación liga (Primera RFEF Grupo II)
+Route::get('/clasificacion', [PublicController::class, 'clasificacion']);
+
 /*
 |--------------------------------------------------------------------------
 | Autenticación unificada (web + app móvil)
