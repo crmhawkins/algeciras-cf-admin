@@ -136,12 +136,22 @@
             </div>
 
             {{-- Caja del cupón de descuento --}}
+            @php
+                // Pre-encodear el contexto del cupón en JSON ANTES del atributo
+                // x-data. Antes esto estaba como
+                //   x-data='couponBoxLw(@json([ "subtotal" => ... ]))'
+                // pero el blade compiler se confundía con los corchetes anidados
+                // dentro del paréntesis (`(@json([...]))`) y tiraba ParseError
+                // 'Unclosed [ on line 182' al compilar — el checkout web caía
+                // siempre en 500. Separar el JSON en un @php previo lo evita.
+                $couponCtxJson = json_encode([
+                    'subtotal' => (float) $previewSubtotalLw,
+                    'total'    => (float) $totalConGestion,
+                    'type'     => (string) $previewProductTypeLw,
+                ], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE);
+            @endphp
             <div class="border-t border-algeciras-black/10 pt-3 mt-3"
-                 x-data='couponBoxLw(@json([
-                     "subtotal" => $previewSubtotalLw,
-                     "total"    => $totalConGestion,
-                     "type"     => $previewProductTypeLw,
-                 ]))'
+                 x-data="couponBoxLw({{ $couponCtxJson }})"
                  wire:ignore>
                 <label class="font-display tracking-widest uppercase text-xs">Código de descuento</label>
                 <div class="flex gap-2 mt-2">

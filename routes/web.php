@@ -72,6 +72,66 @@ Route::get('/zona-socio/{content:slug}', [PageController::class, 'zonaSocioConte
 Route::post('/webhooks/stripe', [\App\Http\Controllers\StripeWebhookController::class, 'handle'])
     ->name('webhooks.stripe');
 
+/*
+|--------------------------------------------------------------------------
+| Compra directa abono/entrada (sin carrito)
+|--------------------------------------------------------------------------
+| El aficionado eligió un abono concreto en /abonos o /producto/{slug} —
+| no tiene sentido pasarlo por el carro de la tienda como si fuera merch.
+| Se crea una Order pending con UN único OrderItem y se le redirige a la
+| pasarela (pago-app) directamente. Si después quiere cancelar lo hace
+| desde su área personal, no desde un carrito que se ha de gestionar.
+|
+| Acepta opcionalmente ?qty=N (máx 6 para evitar abuso).
+*/
+Route::get('/comprar-directo/{product:slug}', function (\App\Models\Product $product, \Illuminate\Http\Request $request) {
+    if (! in_array($product->type, ['abono','entrada'], true)) {
+        return redirect()->route('producto', $product->slug);
+    }
+
+    $qty = max(1, min(6, (int) $request->query('qty', 1)));
+    $unitPrice = (float) $product->price;
+    $subtotalGross = round($unitPrice * $qty, 2);
+    $vatRate = (int) ($product->vat_rate ?? 21);
+    $subtotal = round($subtotalGross / (1 + $vatRate/100), 2);
+    $vat      = round($subtotalGross - $subtotal, 2);
+    $gestion  = \App\Models\Order::calcGestionFee($subtotalGross);
+    $total    = round($subtotalGross + $gestion, 2);
+
+    $order = \Illuminate\Support\Facades\DB::transaction(function () use ($product, $qty, $unitPrice, $subtotal, $vat, $gestion, $total, $subtotalGross, $vatRate) {
+        $order = \App\Models\Order::create([
+            'reference'        => \App\Models\Order::nextReference(),
+            'guest_email'      => optional(auth()->user())->email ?? 'web@algecirascf.es',
+            'status'           => 'pending',
+            'channel'          => 'web',
+            'subtotal'         => $subtotal,
+            'vat'              => $vat,
+            'shipping_cost'    => 0,
+            'gestion_fee'      => $gestion,
+            'total'            => $total,
+            'currency'         => 'EUR',
+            'payment_gateway'  => 'stripe',
+            'admin_notes'      => sprintf('Compra directa web: product=%s qty=%d', $product->sku, $qty),
+        ]);
+        \App\Models\OrderItem::create([
+            'order_id'      => $order->id,
+            'product_id'    => $product->id,
+            'product_type'  => $product->type,
+            'name'          => $product->getTranslation('name','es'),
+            'sku'           => $product->sku,
+            'qty'           => $qty,
+            'unit_price'    => $unitPrice,
+            'vat_rate'      => $vatRate,
+            'subtotal'      => $subtotal,
+            'vat_amount'    => $vat,
+            'total'         => $subtotalGross,
+        ]);
+        return $order;
+    });
+
+    return redirect()->route('pago-app', ['order' => $order->reference]);
+})->name('comprar-directo');
+
 // Pago iniciado desde la app móvil — abre en WebBrowser/SafariViewController.
 Route::get('/pago-app/{order:reference}', function (\App\Models\Order $order) {
     // Crear PaymentIntent si Stripe operativo y la orden todavía está pending.

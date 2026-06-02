@@ -62,10 +62,31 @@ class PageController extends Controller
         ]);
     }
 
-    public function abonos()
+    public function abonos(\Illuminate\Http\Request $request)
     {
+        // Filtro por tipo: renovacion (socios_only=true) o nuevo (socios_only=false).
+        // Sin filtro → la vista muestra el selector "¿Eres socio actual o nuevo?"
+        // El usuario reportó que pasar a /abonos y ver las 8 cards mezcladas
+        // (4 nuevos + 4 renovaciones) llevaba a comprar la equivocada — el
+        // selector separa primero la decisión y después enseña SOLO la columna
+        // correcta.
+        $tipo = $request->query('tipo'); // 'renovacion' | 'nuevo' | null
+        $q = Product::active()->abono()->with('season','zone');
+
+        if ($tipo === 'renovacion') {
+            $q->where('socios_only', true);
+        } elseif ($tipo === 'nuevo') {
+            $q->where('socios_only', false);
+        } else {
+            // Sin tipo seleccionado: mandamos colección vacía para que la
+            // vista enseñe el selector. Evitamos la confusión de mostrar
+            // las 8 mezcladas.
+            return view('pages.abonos', ['abonos' => collect(), 'tipo' => null]);
+        }
+
         return view('pages.abonos', [
-            'abonos' => Product::active()->abono()->with('season','zone')->orderBy('sort_order')->get(),
+            'abonos' => $q->orderBy('sort_order')->get(),
+            'tipo'   => $tipo,
         ]);
     }
 

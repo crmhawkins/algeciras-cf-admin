@@ -24,15 +24,29 @@ class AddToCart extends Component
         }
     }
 
-    public function add(Cart $cart): void
+    public function add(Cart $cart)
     {
         if ($this->product->has_variants && ! $this->variantId) {
             $this->message = 'Selecciona una talla';
-            return;
+            return null;
         }
+
+        // ABONOS y ENTRADAS no pasan por el carrito de la web —
+        // tras pulsar el botón van DIRECTOS al checkout/pago. Decisión de
+        // producto: el aficionado eligió SU abono concreto, no debe
+        // confundir el flujo con un carro de tienda. Para merch sí mantenemos
+        // el carrito porque el cliente puede juntar varios items.
+        if (in_array($this->product->type, ['abono', 'entrada'], true)) {
+            return $this->redirect(
+                route('comprar-directo', ['product' => $this->product->slug, 'qty' => max(1, $this->qty)]),
+                navigate: false
+            );
+        }
+
         $cart->add($this->product->id, $this->variantId, $this->qty);
         $this->message = 'Añadido al carrito ✓';
         $this->dispatch('cart-updated');
+        return null;
     }
 
     #[Computed]
