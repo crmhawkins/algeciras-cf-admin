@@ -70,6 +70,9 @@ Route::get('/partidos', [PublicController::class, 'matches']);
 // Eventos del partido (definido ANTES de /partidos/{id} para que matchee primero)
 Route::get('/partidos/eventos/{id}', [PublicController::class, 'matchEvents'])
     ->whereNumber('id');
+// Próximos partidos con entradas — DEBE ir antes de /partidos/{match} porque
+// si no, Laravel intenta resolver "proximos" como FootballMatch y da 404.
+Route::get('/partidos/proximos', [PublicController::class, 'partidosProximosConEntrada']);
 Route::get('/partidos/{match}', [PublicController::class, 'match']);
 
 // Noticias
@@ -88,6 +91,15 @@ Route::get('/gradas',    [StadiumApiController::class, 'gradas']);
 Route::get('/sectores',  [StadiumApiController::class, 'sectores']);
 Route::get('/asientos',  [StadiumApiController::class, 'asientos']);
 
+// Alias REST-style /api/asientos/sector/{id}: la app móvil lo llamaba
+// ASI hasta 2026-06-02 y daba 404. Lo mantenemos por compatibilidad —
+// internamente reenvía al mismo controller pasando sector_id como query.
+Route::get('/asientos/sector/{sector_id}', function (\Illuminate\Http\Request $request, $sector_id) {
+    $request->query->set('sector_id', (int) $sector_id);
+    return app(StadiumApiController::class)->asientos($request);
+});
+
+
 // Clasificación liga (Primera RFEF Grupo II)
 Route::get('/clasificacion', [PublicController::class, 'clasificacion']);
 
@@ -105,6 +117,12 @@ Route::post('/checkout/payment-sheet',  [CheckoutController::class, 'paymentShee
 Route::post('/checkout/web-redirect',   [CheckoutController::class, 'webRedirect']);
 Route::post('/checkout/sync',           [CheckoutController::class, 'sync']);
 Route::post('/checkout/coupon/preview', [CouponController::class, 'preview']);
+// Aplicar cupón realmente sobre una Order pending + recrear Stripe PI con
+// el nuevo importe. Imprescindible para que el descuento en /pago-app no
+// sea solo cosmético — antes el JS pintaba el descuento pero Stripe
+// cobraba el total original (encontrado en E2E 2026-06-02).
+Route::post('/checkout/order/{order:reference}/coupon/apply',
+    [\App\Http\Controllers\Api\CheckoutController::class, 'applyCouponToOrder']);
 
 /*
 |--------------------------------------------------------------------------
@@ -123,6 +141,7 @@ Route::get('/app/version', [AppVersionController::class, 'current']);
 | Las dos requieren TODO middleware('auth:sanctum') + scope:operator.
 */
 Route::post('/operator/login',                   [OperatorAuthController::class, 'login']);
+Route::get ('/operator/matches/upcoming',        [ValidatorController::class, 'upcomingMatches']);
 Route::post('/validar-qr',                       [ValidatorController::class, 'validate']);
 Route::get ('/admin/matches/{match}/stats',      [ValidatorController::class, 'matchStats']);
 

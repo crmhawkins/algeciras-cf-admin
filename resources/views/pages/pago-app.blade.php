@@ -87,7 +87,21 @@
                 </div>
             </section>
 
-            @if (! $stripeOperativo)
+            @if (! empty($freeOrder))
+                {{-- Total < 0.50€ (típicamente cupón 100%). No tiene sentido
+                     cobrar a Stripe — confirmamos como pagado simulado. --}}
+                <section class="bg-green-50 border-l-4 border-green-600 p-4 mb-4 text-sm">
+                    <p class="font-bold mb-1 text-green-900">¡Pedido gratuito!</p>
+                    <p class="text-green-800">Tu pedido queda confirmado sin cobro. Pulsa el botón para finalizar.</p>
+                </section>
+                <form method="POST" action="{{ route('pago-app.simulado', $order->reference) }}">
+                    @csrf
+                    <button type="submit"
+                            class="w-full px-6 py-4 bg-green-600 text-white font-display tracking-widest uppercase shadow-brutal">
+                        ✓ Confirmar pedido (gratis)
+                    </button>
+                </form>
+            @elseif (! $stripeOperativo)
                 {{-- Sin claves Stripe: mensaje honesto y opción de marcar como simulado --}}
                 <section class="bg-algeciras-cream border-l-4 border-algeciras-gold p-4 mb-4 text-sm">
                     <p class="font-bold mb-1">Pasarela en preparación</p>
@@ -163,9 +177,14 @@
     @push('scripts')
     <script>
         function couponBox() {
-            const ORDER_SUBTOTAL = {{ (float) $order->subtotal + (float) $order->vat }};
-            const ORDER_TOTAL    = {{ (float) $order->total }};
-            const PRODUCT_TYPE   = @json($previewProductType);
+            // CAMBIO 2026-06-02: antes este código llamaba a
+            // /api/checkout/coupon/preview que sólo VALIDABA el cupón pero
+            // NO lo aplicaba a la Order — el descuento sólo se pintaba en
+            // UI y Stripe cobraba el total original (BUG CRÍTICO).
+            // Ahora llamamos a /coupon/apply que actualiza la Order Y
+            // recrea el PaymentIntent. Al éxito recargamos para que
+            // Stripe Elements se reinicialice con el nuevo client_secret.
+            const ORDER_REF      = @json($order->reference);
             const CSRF_TOKEN     = document.querySelector('meta[name=csrf-token]')?.content || '';
 
             return {
@@ -175,11 +194,15 @@
                 error: '',
                 message: '',
                 async apply() {
+                    if (!this.code.trim()) {
+                        this.error = 'Introduce un código';
+                        return;
+                    }
                     this.loading = true;
                     this.error = '';
                     this.message = '';
                     try {
-                        const resp = await fetch('/api/checkout/coupon/preview', {
+                        const resp = await fetch(`/api/checkout/order/${encodeURIComponent(ORDER_REF)}/coupon/apply`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -189,34 +212,16 @@
                             },
                             body: JSON.stringify({
                                 code: this.code.trim().toUpperCase(),
-                                subtotal: ORDER_SUBTOTAL,
-                                product_type: PRODUCT_TYPE,
                             }),
                         });
                         const data = await resp.json();
-                        if (resp.ok && data.valid) {
-                            const discount = Number(data.discount_amount) || 0;
+                        if (resp.ok && data.success) {
                             this.applied = true;
-                            this.message = `Cupón aplicado: -${discount.toFixed(2)}€`;
-
-                            // Actualizar línea de descuento
-                            const line = document.getElementById('order-discount-line');
-                            const amt  = document.getElementById('order-discount-amount');
-                            if (line && amt) {
-                                line.classList.remove('hidden');
-                                amt.textContent = `−${discount.toFixed(2).replace('.', ',')}€`;
-                            }
-
-                            // Actualizar total
-                            const newTotal = Math.max(0, ORDER_TOTAL - discount);
-                            const totalEl  = document.getElementById('order-total-amount');
-                            if (totalEl) totalEl.textContent = `${newTotal.toFixed(2).replace('.', ',')}€`;
-                            const payTotal = document.getElementById('pay-now-total');
-                            if (payTotal) payTotal.textContent = `${newTotal.toFixed(2).replace('.', ',')}€`;
-
-                            // Guardar en hidden input para que se mande en /sync u otro POST
-                            const hidden = document.getElementById('coupon-hidden-input');
-                            if (hidden) hidden.value = this.code.trim().toUpperCase();
+                            this.message = data.message || 'Cupón aplicado';
+                            // Recargamos para que el backend renderice con
+                            // los totales actualizados y monte un Stripe
+                            // Elements nuevo con el client_secret correcto.
+                            setTimeout(() => window.location.reload(), 400);
                         } else {
                             this.error = data.message || 'Código no válido';
                         }

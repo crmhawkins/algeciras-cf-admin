@@ -38,6 +38,23 @@ class StripePaymentService
      */
     public function __construct() {}
 
+    /**
+     * Cancela un PaymentIntent existente (uso: al aplicar cupón sobre una
+     * Order pending, hay que invalidar el PI viejo antes de crear uno con
+     * el nuevo importe). Silencioso si el PI ya no es cancelable.
+     */
+    public function cancelPaymentIntent(string $intentId): void
+    {
+        if (! str_starts_with($intentId, 'pi_')) {
+            return;
+        }
+        try {
+            $this->client()->paymentIntents->cancel($intentId);
+        } catch (\Throwable $e) {
+            \Log::info('cancelPaymentIntent ignorado', ['err' => $e->getMessage()]);
+        }
+    }
+
     private function client(): StripeClient
     {
         if ($this->stripe instanceof StripeClient) {

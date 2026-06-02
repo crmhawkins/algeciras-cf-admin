@@ -314,6 +314,101 @@ class CheckoutController extends Controller
      *
      * @return array{0: ?Coupon, 1: float}  [cupón o null, descuento aplicado en €]
      */
+    /**
+     * Aplica un cupón sobre una Order pending existente, recalcula totales
+     * Y recrea el PaymentIntent de Stripe con el nuevo importe. Sin esto
+     * el cupón en /pago-app sólo era cosmético (UI mostraba descuento pero
+     * Stripe cobraba el total original — bug crítico encontrado en E2E).
+     *
+     * POST /api/checkout/order/{order:reference}/coupon/apply
+     *   body: { code: "CUPON" }
+     *   resp: { success, total, discount, gestion_fee, client_secret? }
+     */
+    public function applyCouponToOrder(Request $request, \App\Models\Order $order): JsonResponse
+    {
+        if ($order->status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Esta orden ya no se puede modificar.',
+            ], 422);
+        }
+
+        $data = $request->validate([
+            'code' => 'required|string|max:64',
+        ]);
+
+        // Type del primer item (todos los pedidos web-redirect/comprar-directo
+        // son de un único item, así que no hace falta lógica multi-type).
+        $firstItem = $order->items()->first();
+        $productType = (string) ($firstItem?->product_type ?? 'all');
+
+        // Base sobre la que se aplica el % del cupón: subtotal + IVA
+        // (lo que veía el cliente antes de gestión, que es lo justo).
+        $baseImponible = (float) $order->subtotal + (float) $order->vat;
+
+        try {
+            [$coupon, $discount] = $this->resolveCoupon($data['code'], $baseImponible, $productType);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->errors()['coupon_code'][0] ?? 'Código no válido',
+            ], 422);
+        }
+
+        if (! $coupon) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Código no válido',
+            ], 422);
+        }
+
+        // Recalculamos con el descuento. Aplicamos el % de gestión sobre el
+        // importe descontado para que un cupón al 100% deje TOTAL=0 real,
+        // no solo en UI.
+        $baseAfterDiscount = round(max(0.0, $baseImponible - $discount), 2);
+        $gestionFee        = \App\Models\Order::calcGestionFee($baseAfterDiscount);
+        $totalFinal        = round($baseAfterDiscount + $gestionFee, 2);
+
+        $order->update([
+            'coupon_id'       => $coupon->id,
+            'coupon_code'     => $coupon->code,
+            'discount_amount' => $discount,
+            'gestion_fee'     => $gestionFee,
+            'total'           => $totalFinal,
+        ]);
+
+        // Recrear el PaymentIntent con el nuevo importe.
+        // Si el total quedó por debajo del mínimo de Stripe (€0.50) o es 0
+        // — caso cupón 100% — devolvemos client_secret=null y dejamos que la
+        // vista pago-app permita "Confirmar pedido sin pago" (markOrderPaid).
+        $clientSecret = null;
+        $stripeOk = (string) config('services.stripe.secret') !== '';
+        if ($stripeOk && $totalFinal >= 0.5) {
+            try {
+                // Cancelamos el PI viejo si existía para que Stripe libere holds.
+                if ($order->payment_intent_id) {
+                    app(\App\Services\StripePaymentService::class)
+                        ->cancelPaymentIntent($order->payment_intent_id);
+                    $order->update(['payment_intent_id' => null]);
+                }
+                $intent = app(\App\Services\StripePaymentService::class)->createIntentForOrder($order->fresh());
+                $clientSecret = $intent->client_secret;
+            } catch (\Throwable $e) {
+                \Log::warning('apply-coupon: error creating PI', ['err' => $e->getMessage()]);
+            }
+        }
+
+        return response()->json([
+            'success'      => true,
+            'message'      => sprintf('Cupón aplicado: -%.2f€', $discount),
+            'discount'     => $discount,
+            'gestion_fee'  => $gestionFee,
+            'total'        => $totalFinal,
+            'client_secret'=> $clientSecret,
+            'free_order'   => $totalFinal < 0.5,
+        ]);
+    }
+
     protected function resolveCoupon(?string $code, float $orderTotal, string $productType): array
     {
         $code = $code !== null ? trim($code) : '';

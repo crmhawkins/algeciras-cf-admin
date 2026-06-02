@@ -12,7 +12,10 @@ Route::get('/calendario',   [PageController::class, 'calendario'])->name('calend
 Route::get('/tienda', fn () => redirect('https://tienda.algecirasclubdefutbol.com', 301))->name('tienda');
 // No tenemos mapeo de slugs en el subdominio externo: redirigimos siempre al home.
 Route::get('/tienda/{product:slug}', fn () => redirect('https://tienda.algecirasclubdefutbol.com', 301))->name('producto');
+// Hub público "Comprar": selector Abono vs Entrada (espejo de la app móvil).
+Route::get('/comprar',      [PageController::class, 'comprar'])->name('comprar');
 Route::get('/abonos',       [PageController::class, 'abonos'])->name('abonos');
+Route::get('/entradas',     [PageController::class, 'entradasPublico'])->name('entradas');
 Route::get('/estadio',      [\App\Http\Controllers\StadiumController::class, 'index'])->name('estadio');
 Route::get('/estadio/sector/{svgRegion}', [\App\Http\Controllers\StadiumController::class, 'sector'])->name('estadio.sector')->whereNumber('svgRegion');
 Route::get('/actualidad',   [PageController::class, 'actualidad'])->name('actualidad');
@@ -134,9 +137,16 @@ Route::get('/comprar-directo/{product:slug}', function (\App\Models\Product $pro
 
 // Pago iniciado desde la app móvil — abre en WebBrowser/SafariViewController.
 Route::get('/pago-app/{order:reference}', function (\App\Models\Order $order) {
-    // Crear PaymentIntent si Stripe operativo y la orden todavía está pending.
+    // Crear PaymentIntent si Stripe operativo, la orden está pending
+    // Y el total alcanza el mínimo de Stripe (€0.50). Si un cupón al 100%
+    // dejó el total por debajo, NO creamos PI — la vista mostrará el botón
+    // "Confirmar pedido (gratis)" que apunta a /pago-app/.../simulado.
     $clientSecret = null;
-    if ((string) config('services.stripe.secret') !== '' && $order->status === 'pending') {
+    $freeOrder    = ((float) $order->total) < 0.50;
+    if ((string) config('services.stripe.secret') !== ''
+        && $order->status === 'pending'
+        && ! $freeOrder
+    ) {
         try {
             $intent = app(\App\Services\StripePaymentService::class)->createIntentForOrder($order);
             $clientSecret = $intent->client_secret;
@@ -148,6 +158,7 @@ Route::get('/pago-app/{order:reference}', function (\App\Models\Order $order) {
     return view('pages.pago-app', [
         'order'        => $order->load('items'),
         'clientSecret' => $clientSecret,
+        'freeOrder'    => $freeOrder,
     ]);
 })->name('pago-app');
 
