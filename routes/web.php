@@ -51,6 +51,9 @@ Route::get('/pedido/{order:reference}', fn (\App\Models\Order $order) => view('p
     'order' => $order->load('items.product', 'tickets.product', 'tickets.zone', 'customer'),
 ]))->name('pedido');
 
+// Política de privacidad — requerida por App Store y Google Play.
+Route::get('/privacidad', fn () => view('pages.privacidad'))->name('privacidad');
+
 Route::get('/zona-socio', [PageController::class, 'zonaSocio'])->name('zona-socio');
 Route::get('/zona-socio/{content:slug}', [PageController::class, 'zonaSocioContent'])->name('zona-socio.content');
 
