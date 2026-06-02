@@ -76,8 +76,24 @@
                 </div>
             </section>
 
-            <section class="bg-algeciras-cream p-4 border-l-4 border-algeciras-gold text-sm">
-                <strong class="font-display tracking-widest uppercase">Pago simulado</strong> · El pago real con Stripe se activa cuando el club nos pase las claves. De momento, este checkout completa el pedido como "pagado" para que veas todo el flow.
+            <section class="bg-white border-2 border-algeciras-black/10 p-6 space-y-4">
+                <h2 class="font-display text-2xl">Pago seguro</h2>
+
+                @if (! $this->stripeOperativo)
+                    <div class="bg-algeciras-cream p-4 border-l-4 border-algeciras-gold text-sm">
+                        <strong class="font-display tracking-widest uppercase">Pago simulado</strong> · STRIPE_SECRET no configurado. El pedido se marcará como pagado de forma simulada para test.
+                    </div>
+                @else
+                    {{-- Stripe Payment Element se monta aquí cuando submit() devuelva clientSecret --}}
+                    <div id="payment-element" class="min-h-[140px]">
+                        @if (! $clientSecret)
+                            <p class="text-sm text-algeciras-gray">
+                                Rellena los datos y pulsa <em>Confirmar pedido</em> — entonces aparecerá la pasarela segura de Stripe (tarjeta, Apple Pay, Google Pay).
+                            </p>
+                        @endif
+                    </div>
+                    <div id="payment-message" class="text-sm text-algeciras-red hidden"></div>
+                @endif
             </section>
         </div>
 
@@ -100,12 +116,67 @@
                 <span class="font-display text-3xl text-algeciras-red">{{ number_format($this->total, 2, ',', '.') }}€</span>
             </div>
 
-            <button type="submit" wire:loading.attr="disabled"
-                    class="w-full px-6 py-4 bg-algeciras-red hover:bg-algeciras-red-dark text-white font-display tracking-widest uppercase shadow-brutal hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition disabled:opacity-50">
-                <span wire:loading.remove wire:target="submit">Confirmar pedido</span>
-                <span wire:loading wire:target="submit">Procesando...</span>
-            </button>
+            @if ($clientSecret)
+                {{-- Botón "Pagar" gestionado por Stripe.js (no Livewire) --}}
+                <button type="button" id="pay-now-btn"
+                        class="w-full px-6 py-4 bg-algeciras-red hover:bg-algeciras-red-dark text-white font-display tracking-widest uppercase shadow-brutal hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition disabled:opacity-50">
+                    <span id="pay-now-label">💳 Pagar {{ number_format($this->total, 2, ',', '.') }}€</span>
+                    <span id="pay-now-spinner" class="hidden">Procesando…</span>
+                </button>
+            @else
+                <button type="submit" wire:loading.attr="disabled"
+                        class="w-full px-6 py-4 bg-algeciras-red hover:bg-algeciras-red-dark text-white font-display tracking-widest uppercase shadow-brutal hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition disabled:opacity-50">
+                    <span wire:loading.remove wire:target="submit">Confirmar pedido</span>
+                    <span wire:loading wire:target="submit">Procesando...</span>
+                </button>
+            @endif
         </aside>
     </form>
+
+    @if ($this->stripeOperativo)
+        {{-- Stripe.js + montaje del Payment Element cuando el evento stripe:ready dispara --}}
+        <script src="https://js.stripe.com/v3/"></script>
+        <script>
+            (function () {
+                let stripe = null;
+                let elements = null;
+
+                window.addEventListener('stripe:ready', (e) => {
+                    const { clientSecret, publishableKey, returnUrl } = e.detail[0] ?? e.detail;
+                    if (!clientSecret || !publishableKey) return;
+
+                    stripe = Stripe(publishableKey);
+                    elements = stripe.elements({ clientSecret, locale: 'es' });
+                    const payEl = elements.create('payment', { layout: 'tabs' });
+                    payEl.mount('#payment-element');
+
+                    document.getElementById('pay-now-btn').addEventListener('click', async () => {
+                        const btn = document.getElementById('pay-now-btn');
+                        const label = document.getElementById('pay-now-label');
+                        const spinner = document.getElementById('pay-now-spinner');
+                        const msg = document.getElementById('payment-message');
+
+                        btn.disabled = true;
+                        label.classList.add('hidden');
+                        spinner.classList.remove('hidden');
+                        msg.classList.add('hidden');
+
+                        const { error } = await stripe.confirmPayment({
+                            elements,
+                            confirmParams: { return_url: returnUrl },
+                        });
+
+                        if (error) {
+                            msg.textContent = error.message || 'Error con el pago.';
+                            msg.classList.remove('hidden');
+                            btn.disabled = false;
+                            label.classList.remove('hidden');
+                            spinner.classList.add('hidden');
+                        }
+                    });
+                });
+            })();
+        </script>
+    @endif
 @endif
 </div>

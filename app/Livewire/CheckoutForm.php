@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Services\Cart;
 use App\Services\CheckoutService;
+use App\Services\StripePaymentService;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
 
@@ -22,6 +23,11 @@ class CheckoutForm extends Component
 
     public ?string $error = null;
 
+    /** Set tras crear el PaymentIntent — disparado a la vista para que Stripe.js termine el flow. */
+    public ?string $clientSecret = null;
+    public ?string $orderReference = null;
+    public ?string $publishableKey = null;
+
     protected function rules(): array
     {
         return [
@@ -38,13 +44,42 @@ class CheckoutForm extends Component
         ];
     }
 
-    public function submit(CheckoutService $checkout)
+    /**
+     * Submit: NO completa el pago. Crea Order(pending) + PaymentIntent.
+     * Devuelve el clientSecret a la vista para que Stripe.js termine el cobro
+     * con stripe.confirmPayment({...}).
+     *
+     * Si STRIPE_SECRET no está configurado, cae al flujo simulado heredado
+     * para que el checkout siga funcional mientras el club no tenga claves.
+     */
+    public function submit(CheckoutService $checkout, StripePaymentService $stripe)
     {
         $data = $this->validate();
+
         try {
-            $order = $checkout->placeOrder($data);
-            $this->dispatch('cart-updated');
-            return redirect()->route('pedido', $order->reference);
+            // ¿Stripe operativo?
+            $stripeOperativo = (string) config('services.stripe.secret') !== '';
+
+            if (!$stripeOperativo) {
+                // Fallback simulado (el comportamiento que ya tenía la web).
+                $order = $checkout->placeOrderSimulated($data);
+                $this->dispatch('cart-updated');
+                return redirect()->route('pedido', $order->reference);
+            }
+
+            $order  = $checkout->createPendingOrder($data);
+            $intent = $stripe->createIntentForOrder($order);
+
+            $this->clientSecret   = $intent->client_secret;
+            $this->orderReference = $order->reference;
+            $this->publishableKey = (string) config('services.stripe.key');
+
+            // Avisamos al JS que monta el PaymentElement.
+            $this->dispatch('stripe:ready', [
+                'clientSecret'   => $this->clientSecret,
+                'publishableKey' => $this->publishableKey,
+                'returnUrl'      => route('pedido', $order->reference),
+            ]);
         } catch (\Throwable $e) {
             $this->error = $e->getMessage();
         }
@@ -62,6 +97,12 @@ class CheckoutForm extends Component
     public function vat(): float { return app(Cart::class)->vat(); }
     #[Computed]
     public function total(): float { return app(Cart::class)->total(); }
+
+    #[Computed]
+    public function stripeOperativo(): bool
+    {
+        return (string) config('services.stripe.secret') !== '';
+    }
 
     public function render()
     {

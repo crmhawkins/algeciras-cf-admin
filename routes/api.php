@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CheckoutController;
 use App\Http\Controllers\Api\FanzoneController;
 use App\Http\Controllers\Api\MyAccountController;
 use App\Http\Controllers\Api\PublicController;
@@ -82,6 +83,19 @@ Route::get('/asientos',  [StadiumApiController::class, 'asientos']);
 
 // Clasificación liga (Primera RFEF Grupo II)
 Route::get('/clasificacion', [PublicController::class, 'clasificacion']);
+
+/*
+|--------------------------------------------------------------------------
+| Checkout (Stripe) — app móvil
+|--------------------------------------------------------------------------
+| /payment-sheet  → crea Order pending + PaymentIntent + devuelve los
+|                   parámetros para mostrar PaymentSheet en la app.
+| /sync           → tras cerrar PaymentSheet, la app pregunta el estado real.
+| Ambos públicos por ahora (guest checkout). Cuando se integre la sesión
+| socio, mover bajo middleware('auth:sanctum').
+*/
+Route::post('/checkout/payment-sheet', [CheckoutController::class, 'paymentSheet']);
+Route::post('/checkout/sync',          [CheckoutController::class, 'sync']);
 
 /*
 |--------------------------------------------------------------------------

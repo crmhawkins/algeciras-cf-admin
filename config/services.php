@@ -31,4 +31,19 @@ return [
         ],
     ],
 
+    /*
+    | Stripe — Algeciras CF (cuenta agencia, temporal hasta Redsys).
+    | El plan es: STRIPE_KEY/STRIPE_SECRET ahora; cuando el club obtenga
+    | sus propias credenciales Redsys, este bloque se desactiva y entra
+    | un Driver Redsys equivalente.
+    */
+    'stripe' => [
+        'key'     => env('STRIPE_KEY'),
+        'secret'  => env('STRIPE_SECRET'),
+        'webhook' => [
+            'secret'    => env('STRIPE_WEBHOOK_SECRET'),
+            'tolerance' => env('STRIPE_WEBHOOK_TOLERANCE', 300),
+        ],
+    ],
+
 ];

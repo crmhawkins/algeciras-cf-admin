@@ -53,3 +53,8 @@ Route::get('/pedido/{order:reference}', fn (\App\Models\Order $order) => view('p
 
 Route::get('/zona-socio', [PageController::class, 'zonaSocio'])->name('zona-socio');
 Route::get('/zona-socio/{content:slug}', [PageController::class, 'zonaSocioContent'])->name('zona-socio.content');
+
+// Stripe webhook — sin CSRF (Stripe NO firma cookies).
+// La exclusión CSRF se hace vía bootstrap/app.php (validateCsrfTokens->except).
+Route::post('/webhooks/stripe', [\App\Http\Controllers\StripeWebhookController::class, 'handle'])
+    ->name('webhooks.stripe');
