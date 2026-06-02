@@ -21,6 +21,9 @@ class CheckoutForm extends Component
     public string $postal_code = '';
     public string $country = 'España';
 
+    /** Cupón aplicado en el resumen (lo rellena Alpine vía hidden input). */
+    public string $coupon_code = '';
+
     public ?string $error = null;
 
     /** Set tras crear el PaymentIntent — disparado a la vista para que Stripe.js termine el flow. */
@@ -41,6 +44,7 @@ class CheckoutForm extends Component
             'province'    => 'nullable|string|max:80',
             'postal_code' => 'required|string|max:12',
             'country'     => 'required|string|max:80',
+            'coupon_code' => 'nullable|string|max:40',
         ];
     }
 
@@ -59,6 +63,12 @@ class CheckoutForm extends Component
         try {
             // ¿Stripe operativo?
             $stripeOperativo = (string) config('services.stripe.secret') !== '';
+
+            // El cupón (si llegó) se reenvía al CheckoutService como una clave
+            // más del array `$data`. El servicio lo aplica al crear la Order.
+            if (!empty($this->coupon_code)) {
+                $data['coupon_code'] = strtoupper(trim($this->coupon_code));
+            }
 
             if (!$stripeOperativo) {
                 // Fallback simulado (el comportamiento que ya tenía la web).

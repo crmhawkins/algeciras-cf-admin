@@ -61,6 +61,36 @@ class CouponForm
                         'peñista'      => 'Peñista',
                     ])
                     ->native(false),
+                Select::make('applies_to')
+                    ->label('Aplica a')
+                    ->required()
+                    ->default('all')
+                    ->options([
+                        'all'             => 'Todo',
+                        'abonos'          => 'Abonos',
+                        'entradas'        => 'Entradas',
+                        'abonos_entradas' => 'Abonos + Entradas',
+                        'merch'           => 'Merchandising',
+                    ])
+                    ->native(false),
+                TextInput::make('min_order_total')
+                    ->label('Mínimo pedido (€)')
+                    ->numeric()
+                    ->step(0.01)
+                    ->helperText('Subtotal mínimo para que el cupón aplique. Vacío = sin mínimo.'),
+                TextInput::make('max_discount')
+                    ->label('Tope descuento (€)')
+                    ->numeric()
+                    ->step(0.01)
+                    ->helperText('Tope máximo del descuento aplicado. Vacío = sin tope.'),
+                Toggle::make('customer_required')
+                    ->label('Sólo clientes asignados')
+                    ->helperText('Si está activo, sólo clientes con el cupón asignado pueden canjearlo.')
+                    ->default(false),
+                Toggle::make('public_code')
+                    ->label('Visible en checkout público')
+                    ->helperText('Si está activo, cualquier cliente que conozca el código puede usarlo en el checkout.')
+                    ->default(true),
                 TextInput::make('max_uses_per_customer')
                     ->label('Usos máx. por cliente')
                     ->numeric()

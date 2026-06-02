@@ -16,6 +16,8 @@ class Order extends Model
         'shipping_address','billing_address',
         'tracking_carrier','tracking_number',
         'paid_at','fulfilled_at','cancelled_at','admin_notes',
+        // Cupón aplicado (2026-06-03)
+        'coupon_id','coupon_code','discount_amount',
     ];
 
     protected $casts = [
@@ -25,6 +27,7 @@ class Order extends Model
         'vat' => 'decimal:2',
         'shipping_cost' => 'decimal:2',
         'gestion_fee' => 'decimal:2',
+        'discount_amount' => 'decimal:2',
         'total' => 'decimal:2',
         'paid_at' => 'datetime',
         'fulfilled_at' => 'datetime',
@@ -46,6 +49,7 @@ class Order extends Model
     public function customer() { return $this->belongsTo(Customer::class); }
     public function items()    { return $this->hasMany(OrderItem::class); }
     public function tickets()  { return $this->hasManyThrough(Ticket::class, OrderItem::class); }
+    public function coupon()   { return $this->belongsTo(Coupon::class); }
 
     public static function nextReference(): string
     {

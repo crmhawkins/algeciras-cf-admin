@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Coupon;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -12,6 +13,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Checkout endpoints para la app móvil (React Native).
@@ -59,6 +61,8 @@ class CheckoutController extends Controller
             'customer.country'       => 'nullable|string|max:80',
 
             'channel'                => ['nullable', Rule::in(['app','web','admin'])],
+
+            'coupon_code'            => 'nullable|string|max:64',
         ]);
 
         $order = DB::transaction(function () use ($data) {
@@ -89,10 +93,17 @@ class CheckoutController extends Controller
                 ];
             }
 
-            // 3) Order pending — total incluye gastos de gestión (5%)
-            $base       = round($subtotal + $vat, 2);
-            $gestionFee = Order::calcGestionFee($base);
-            $totalFinal = round($base + $gestionFee, 2);
+            // 3) Cupón opcional — calcula descuento sobre el subtotal IVA incluido.
+            //    Si el cliente envía un code inválido, abortamos la creación de
+            //    la order para no cobrar más de la cuenta sin avisar.
+            $base = round($subtotal + $vat, 2);
+
+            $productTypeForCoupon = $this->resolveProductTypeFromItems($itemsResolved);
+            [$coupon, $discount] = $this->resolveCoupon($data['coupon_code'] ?? null, $base, $productTypeForCoupon);
+
+            $baseAfterDiscount = round(max(0.0, $base - $discount), 2);
+            $gestionFee        = Order::calcGestionFee($baseAfterDiscount);
+            $totalFinal        = round($baseAfterDiscount + $gestionFee, 2);
 
             $order = Order::create([
                 'reference'        => Order::nextReference(),
@@ -104,6 +115,9 @@ class CheckoutController extends Controller
                 'vat'              => round($vat, 2),
                 'shipping_cost'    => 0,
                 'gestion_fee'      => $gestionFee,
+                'discount_amount'  => $discount,
+                'coupon_id'        => $coupon?->id,
+                'coupon_code'      => $coupon?->code,
                 'total'            => $totalFinal,
                 'currency'         => 'EUR',
                 'payment_gateway'  => 'stripe',
@@ -160,11 +174,12 @@ class CheckoutController extends Controller
     public function webRedirect(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'sectorId'   => 'nullable|integer',
-            'asientoId'  => 'nullable|integer',
-            'precio'     => 'required|numeric|min:0.5|max:9999',
-            'dni'        => 'nullable|string|max:24',
-            'type'       => ['nullable', Rule::in(['abono','entrada','merch'])],
+            'sectorId'    => 'nullable|integer',
+            'asientoId'   => 'nullable|integer',
+            'precio'      => 'required|numeric|min:0.5|max:9999',
+            'dni'         => 'nullable|string|max:24',
+            'type'        => ['nullable', Rule::in(['abono','entrada','merch'])],
+            'coupon_code' => 'nullable|string|max:64',
         ]);
 
         // El parámetro `precio` es el PRECIO BASE del producto (lo que verá
@@ -174,14 +189,23 @@ class CheckoutController extends Controller
         $precioBase   = (float) $data['precio'];
         $subtotal     = round($precioBase / 1.21, 2);
         $vat          = round($precioBase - $subtotal, 2);
-        $gestionFee   = Order::calcGestionFee($precioBase);
-        $totalFinal   = round($precioBase + $gestionFee, 2);
+
+        // Cupón opcional sobre el precio base IVA incluido.
+        [$coupon, $discount] = $this->resolveCoupon(
+            $data['coupon_code'] ?? null,
+            $precioBase,
+            $data['type'] ?? 'all'
+        );
+
+        $baseAfterDiscount = round(max(0.0, $precioBase - $discount), 2);
+        $gestionFee        = Order::calcGestionFee($baseAfterDiscount);
+        $totalFinal        = round($baseAfterDiscount + $gestionFee, 2);
 
         // Crear Order pending mínima sin OrderItem (la creamos como ad-hoc).
         // Cuando exista Product->id para el asiento (mapping seat→product),
         // este endpoint lo enlazará. De momento dejamos la order con un
         // OrderItem "abono ad-hoc" para que el total cuadre.
-        $order = DB::transaction(function () use ($precioBase, $subtotal, $vat, $gestionFee, $totalFinal, $data) {
+        $order = DB::transaction(function () use ($precioBase, $subtotal, $vat, $gestionFee, $totalFinal, $data, $coupon, $discount) {
             $order = Order::create([
                 'reference'        => Order::nextReference(),
                 'guest_email'      => 'app@algecirascf.es', // TODO: usar email del usuario auth si llega Bearer
@@ -191,18 +215,23 @@ class CheckoutController extends Controller
                 'vat'              => $vat,
                 'shipping_cost'    => 0,
                 'gestion_fee'      => $gestionFee,
+                'discount_amount'  => $discount,
+                'coupon_id'        => $coupon?->id,
+                'coupon_code'      => $coupon?->code,
                 'total'            => $totalFinal,
                 'currency'         => 'EUR',
                 'payment_gateway'  => 'stripe',
                 'payment_intent_id'=> null,
                 'admin_notes'      => sprintf(
-                    'App mobile: type=%s sectorId=%s asientoId=%s dni=%s | precio_base=%.2f gestion_5pct=%.2f',
+                    'App mobile: type=%s sectorId=%s asientoId=%s dni=%s | precio_base=%.2f gestion_5pct=%.2f coupon=%s discount=%.2f',
                     $data['type']  ?? 'abono',
                     $data['sectorId']  ?? '?',
                     $data['asientoId'] ?? '?',
                     $data['dni']  ?? '-',
                     $precioBase,
                     $gestionFee,
+                    $coupon?->code ?? '-',
+                    $discount,
                 ),
             ]);
 
@@ -276,5 +305,53 @@ class CheckoutController extends Controller
                 'id' => $t->id, 'status' => $t->status, 'qr_url' => $t->qr_url ?? null,
             ])->values(),
         ]);
+    }
+
+    /**
+     * Resuelve el cupón a aplicar a partir del code enviado. Si llega code
+     * pero no es válido, lanza ValidationException 422 con mensaje en
+     * `coupon_code` para que el frontend lo muestre debajo del input.
+     *
+     * @return array{0: ?Coupon, 1: float}  [cupón o null, descuento aplicado en €]
+     */
+    protected function resolveCoupon(?string $code, float $orderTotal, string $productType): array
+    {
+        $code = $code !== null ? trim($code) : '';
+        if ($code === '') {
+            return [null, 0.0];
+        }
+
+        $coupon = Coupon::whereRaw('LOWER(code) = ?', [strtolower($code)])->first();
+        if (! $coupon) {
+            throw ValidationException::withMessages([
+                'coupon_code' => 'Código no válido',
+            ]);
+        }
+
+        $result = $coupon->applyTo($orderTotal, $productType);
+        if (! $result['applies']) {
+            throw ValidationException::withMessages([
+                'coupon_code' => $result['reason'] ?? 'Cupón no aplicable',
+            ]);
+        }
+
+        return [$coupon, (float) $result['discount']];
+    }
+
+    /**
+     * Reduce el tipo de producto de un carrito multi-item a un solo string
+     * para validar contra applies_to. Si todos los items son del mismo type
+     * devuelve ese type; si son mixtos, 'all'.
+     *
+     * @param array<int, array{product: Product}> $itemsResolved
+     */
+    protected function resolveProductTypeFromItems(array $itemsResolved): string
+    {
+        $types = collect($itemsResolved)
+            ->map(fn ($r) => (string) ($r['product']->type ?? 'all'))
+            ->unique()
+            ->values();
+
+        return $types->count() === 1 ? $types->first() : 'all';
     }
 }

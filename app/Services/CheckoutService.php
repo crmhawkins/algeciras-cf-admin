@@ -2,12 +2,14 @@
 
 namespace App\Services;
 
+use App\Models\Coupon;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Ticket;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Servicio de checkout.
@@ -56,8 +58,15 @@ class CheckoutService
                 ]
             );
 
-            $base       = $this->cart->total(); // ya incluye subtotal + vat
-            $gestionFee = Order::calcGestionFee($base);
+            $base = $this->cart->total(); // ya incluye subtotal + vat
+
+            // Cupón opcional sobre el subtotal IVA incluido. El gestion_fee
+            // se recalcula sobre el subtotal YA DESCONTADO.
+            $productType         = $this->resolveProductTypeFromCart($items);
+            [$coupon, $discount] = $this->resolveCoupon($data['coupon_code'] ?? null, $base, $productType);
+
+            $baseAfterDiscount = round(max(0.0, $base - $discount), 2);
+            $gestionFee        = Order::calcGestionFee($baseAfterDiscount);
 
             $order = Order::create([
                 'reference'        => Order::nextReference(),
@@ -69,7 +78,10 @@ class CheckoutService
                 'vat'              => $this->cart->vat(),
                 'shipping_cost'    => 0,
                 'gestion_fee'      => $gestionFee,
-                'total'            => round($base + $gestionFee, 2),
+                'discount_amount'  => $discount,
+                'coupon_id'        => $coupon?->id,
+                'coupon_code'      => $coupon?->code,
+                'total'            => round($baseAfterDiscount + $gestionFee, 2),
                 'currency'         => 'EUR',
                 'payment_gateway'  => 'stripe',     // pre-marcado, se confirma en webhook
                 'payment_intent_id'=> null,         // lo escribe StripePaymentService
@@ -207,5 +219,50 @@ class CheckoutService
         $order->update(['payment_gateway' => 'simulated']);
         $this->cart->clear();
         return $order;
+    }
+
+    /**
+     * Resuelve el cupón. Lanza ValidationException 422 con `coupon_code`
+     * si se envía un code inválido (no se crea la order).
+     *
+     * @return array{0: ?Coupon, 1: float}
+     */
+    protected function resolveCoupon(?string $code, float $orderTotal, string $productType): array
+    {
+        $code = $code !== null ? trim($code) : '';
+        if ($code === '') {
+            return [null, 0.0];
+        }
+
+        $coupon = Coupon::whereRaw('LOWER(code) = ?', [strtolower($code)])->first();
+        if (! $coupon) {
+            throw ValidationException::withMessages([
+                'coupon_code' => 'Código no válido',
+            ]);
+        }
+
+        $result = $coupon->applyTo($orderTotal, $productType);
+        if (! $result['applies']) {
+            throw ValidationException::withMessages([
+                'coupon_code' => $result['reason'] ?? 'Cupón no aplicable',
+            ]);
+        }
+
+        return [$coupon, (float) $result['discount']];
+    }
+
+    /**
+     * Determina el product_type "dominante" del carrito para validar
+     * applies_to. Si todos los items son del mismo tipo, devuelve ese;
+     * si son mixtos, 'all'.
+     */
+    protected function resolveProductTypeFromCart(\Illuminate\Support\Collection $items): string
+    {
+        $types = $items
+            ->map(fn ($it) => (string) ($it->product->type ?? 'all'))
+            ->unique()
+            ->values();
+
+        return $types->count() === 1 ? $types->first() : 'all';
     }
 }

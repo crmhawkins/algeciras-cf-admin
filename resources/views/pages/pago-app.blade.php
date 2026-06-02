@@ -36,6 +36,8 @@
                 @php
                     $itemsTotal  = $order->items->sum('total');
                     $gestionFee  = (float) ($order->gestion_fee ?? 0);
+                    $previewSubtotal = (float) $order->subtotal + (float) $order->vat;
+                    $previewProductType = optional($order->items->first())->product_type ?? 'all';
                 @endphp
 
                 <div class="border-t border-algeciras-black/10 pt-3 space-y-1 text-sm">
@@ -43,6 +45,13 @@
                         <span>Subtotal entradas/abono</span>
                         <span class="font-display whitespace-nowrap">{{ number_format($itemsTotal, 2, ',', '.') }}€</span>
                     </div>
+
+                    {{-- Línea descuento (oculta hasta aplicar cupón) --}}
+                    <div id="order-discount-line" class="flex justify-between text-green-600 hidden">
+                        <span>Descuento</span>
+                        <span id="order-discount-amount" class="font-display whitespace-nowrap">−0,00€</span>
+                    </div>
+
                     @if ($gestionFee > 0)
                         <div class="flex justify-between text-algeciras-black/75">
                             <span class="flex items-center gap-1">
@@ -54,9 +63,27 @@
                     @endif
                 </div>
 
+                {{-- Caja del cupón de descuento --}}
+                <div class="border-t border-algeciras-black/10 pt-3 mt-3" x-data="couponBox()">
+                    <label class="font-display tracking-widest uppercase text-xs">Código de descuento</label>
+                    <div class="flex gap-2 mt-2">
+                        <input x-model="code" type="text"
+                               class="flex-1 px-3 py-2 border-2 border-algeciras-black/10 focus:border-algeciras-red focus:outline-none transition font-mono uppercase text-sm"
+                               placeholder="ALGECIRAS25" :disabled="applied">
+                        <button type="button" @click="apply" :disabled="loading || applied || !code"
+                                class="px-4 py-2 bg-algeciras-black text-white font-display tracking-wider uppercase text-xs hover:bg-algeciras-red transition disabled:opacity-50">
+                            <span x-show="!applied">Aplicar</span>
+                            <span x-show="applied">✓ Aplicado</span>
+                        </button>
+                    </div>
+                    <p x-show="error" x-text="error" class="text-xs text-algeciras-red mt-1"></p>
+                    <p x-show="applied && message" x-text="message" class="text-xs text-green-600 mt-1"></p>
+                    <input type="hidden" id="coupon-hidden-input" name="coupon_code" value="">
+                </div>
+
                 <div class="border-t-2 border-algeciras-black/20 pt-3 mt-3 flex justify-between items-baseline">
                     <span class="font-display text-base uppercase">Total</span>
-                    <span class="font-display text-2xl text-algeciras-red">{{ number_format($order->total, 2, ',', '.') }}€</span>
+                    <span class="font-display text-2xl text-algeciras-red" id="order-total-amount">{{ number_format($order->total, 2, ',', '.') }}€</span>
                 </div>
             </section>
 
@@ -82,7 +109,7 @@
                 </section>
                 <button type="button" id="pay-now-btn"
                         class="w-full px-6 py-4 bg-algeciras-red hover:bg-algeciras-red-dark text-white font-display tracking-widest uppercase shadow-brutal disabled:opacity-50">
-                    <span id="pay-now-label">💳 Pagar {{ number_format($order->total, 2, ',', '.') }}€</span>
+                    <span id="pay-now-label">💳 Pagar <span id="pay-now-total">{{ number_format($order->total, 2, ',', '.') }}€</span></span>
                     <span id="pay-now-spinner" class="hidden">Procesando…</span>
                 </button>
 
@@ -132,4 +159,74 @@
             </p>
         </main>
     </div>
+
+    @push('scripts')
+    <script>
+        function couponBox() {
+            const ORDER_SUBTOTAL = {{ (float) $order->subtotal + (float) $order->vat }};
+            const ORDER_TOTAL    = {{ (float) $order->total }};
+            const PRODUCT_TYPE   = @json($previewProductType);
+            const CSRF_TOKEN     = document.querySelector('meta[name=csrf-token]')?.content || '';
+
+            return {
+                code: '',
+                loading: false,
+                applied: false,
+                error: '',
+                message: '',
+                async apply() {
+                    this.loading = true;
+                    this.error = '';
+                    this.message = '';
+                    try {
+                        const resp = await fetch('/api/checkout/coupon/preview', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'X-CSRF-TOKEN': CSRF_TOKEN,
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                            body: JSON.stringify({
+                                code: this.code.trim().toUpperCase(),
+                                subtotal: ORDER_SUBTOTAL,
+                                product_type: PRODUCT_TYPE,
+                            }),
+                        });
+                        const data = await resp.json();
+                        if (resp.ok && data.valid) {
+                            const discount = Number(data.discount_amount) || 0;
+                            this.applied = true;
+                            this.message = `Cupón aplicado: -${discount.toFixed(2)}€`;
+
+                            // Actualizar línea de descuento
+                            const line = document.getElementById('order-discount-line');
+                            const amt  = document.getElementById('order-discount-amount');
+                            if (line && amt) {
+                                line.classList.remove('hidden');
+                                amt.textContent = `−${discount.toFixed(2).replace('.', ',')}€`;
+                            }
+
+                            // Actualizar total
+                            const newTotal = Math.max(0, ORDER_TOTAL - discount);
+                            const totalEl  = document.getElementById('order-total-amount');
+                            if (totalEl) totalEl.textContent = `${newTotal.toFixed(2).replace('.', ',')}€`;
+                            const payTotal = document.getElementById('pay-now-total');
+                            if (payTotal) payTotal.textContent = `${newTotal.toFixed(2).replace('.', ',')}€`;
+
+                            // Guardar en hidden input para que se mande en /sync u otro POST
+                            const hidden = document.getElementById('coupon-hidden-input');
+                            if (hidden) hidden.value = this.code.trim().toUpperCase();
+                        } else {
+                            this.error = data.message || 'Código no válido';
+                        }
+                    } catch (e) {
+                        this.error = 'Error al validar el cupón';
+                    }
+                    this.loading = false;
+                }
+            };
+        }
+    </script>
+    @endpush
 @endsection

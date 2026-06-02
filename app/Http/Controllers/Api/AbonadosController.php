@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Coupon;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -12,6 +13,7 @@ use App\Models\Ticket;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Endpoints de renovación de abono para la app móvil.
@@ -140,6 +142,7 @@ class AbonadosController extends Controller
             'items.*.product_id'       => 'required|integer|exists:products,id',
             'items.*.qty'              => 'required|integer|min:1|max:5',
             'stripe_payment_method_id' => 'nullable|string|max:120',
+            'coupon_code'              => 'nullable|string|max:64',
         ]);
 
         $dni = $this->normalizeDni($data['dni']);
@@ -196,9 +199,18 @@ class AbonadosController extends Controller
                 $itemsResolved[] = compact('product', 'qty', 'unit', 'itemSub', 'itemVat');
             }
 
-            $base       = round($subtotal + $vat, 2);
-            $gestionFee = Order::calcGestionFee($base);
-            $total      = round($base + $gestionFee, 2);
+            $base = round($subtotal + $vat, 2);
+
+            // Cupón opcional — renovación de abono → product_type = 'abono'.
+            [$coupon, $discount] = $this->resolveCoupon(
+                $data['coupon_code'] ?? null,
+                $base,
+                'abono'
+            );
+
+            $baseAfterDiscount = round(max(0.0, $base - $discount), 2);
+            $gestionFee        = Order::calcGestionFee($baseAfterDiscount);
+            $total             = round($baseAfterDiscount + $gestionFee, 2);
 
             $order = Order::create([
                 'reference'        => Order::nextReference(),
@@ -210,6 +222,9 @@ class AbonadosController extends Controller
                 'vat'              => round($vat, 2),
                 'shipping_cost'    => 0,
                 'gestion_fee'      => $gestionFee,
+                'discount_amount'  => $discount,
+                'coupon_id'        => $coupon?->id,
+                'coupon_code'      => $coupon?->code,
                 'total'            => $total,
                 'currency'         => 'EUR',
                 'payment_gateway'  => 'stripe',
@@ -319,5 +334,36 @@ class AbonadosController extends Controller
         }
         // Fallback: precio del abono original
         return (float) ($ticket->product->price ?? 0);
+    }
+
+    /**
+     * Resuelve el cupón a aplicar. Lanza ValidationException 422 con
+     * mensaje en `coupon_code` si llega code pero no es válido (no se
+     * crea la order en ese caso).
+     *
+     * @return array{0: ?Coupon, 1: float}
+     */
+    private function resolveCoupon(?string $code, float $orderTotal, string $productType): array
+    {
+        $code = $code !== null ? trim($code) : '';
+        if ($code === '') {
+            return [null, 0.0];
+        }
+
+        $coupon = Coupon::whereRaw('LOWER(code) = ?', [strtolower($code)])->first();
+        if (! $coupon) {
+            throw ValidationException::withMessages([
+                'coupon_code' => 'Código no válido',
+            ]);
+        }
+
+        $result = $coupon->applyTo($orderTotal, $productType);
+        if (! $result['applies']) {
+            throw ValidationException::withMessages([
+                'coupon_code' => $result['reason'] ?? 'Cupón no aplicable',
+            ]);
+        }
+
+        return [$coupon, (float) $result['discount']];
     }
 }

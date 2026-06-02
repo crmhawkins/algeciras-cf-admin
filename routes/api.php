@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AbonoMatchQrController;
 use App\Http\Controllers\Api\AppVersionController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CheckoutController;
+use App\Http\Controllers\Api\CouponController;
 use App\Http\Controllers\Api\FanzoneController;
 use App\Http\Controllers\Api\MyAccountController;
 use App\Http\Controllers\Api\OperatorAuthController;
@@ -103,6 +104,7 @@ Route::get('/clasificacion', [PublicController::class, 'clasificacion']);
 Route::post('/checkout/payment-sheet',  [CheckoutController::class, 'paymentSheet']);
 Route::post('/checkout/web-redirect',   [CheckoutController::class, 'webRedirect']);
 Route::post('/checkout/sync',           [CheckoutController::class, 'sync']);
+Route::post('/checkout/coupon/preview', [CouponController::class, 'preview']);
 
 /*
 |--------------------------------------------------------------------------

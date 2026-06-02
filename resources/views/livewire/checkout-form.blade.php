@@ -10,6 +10,9 @@
 @else
     <form wire:submit="submit" class="container mx-auto px-4 lg:px-8 py-16 grid lg:grid-cols-3 gap-10">
 
+        {{-- Cupón aplicado: se pasa a Livewire vía wire:model y al servidor en submit() --}}
+        <input type="hidden" id="coupon-hidden-input" wire:model="coupon_code">
+
         <div class="lg:col-span-2 space-y-6">
             <a href="{{ route('carrito') }}" class="font-display tracking-widest uppercase text-sm text-algeciras-red hover:underline">← Volver al carrito</a>
             <h1 class="font-display text-5xl">Tramitar pedido</h1>
@@ -111,10 +114,19 @@
                 $cartTotal  = (float) $this->total;            // base (sub + vat) sin gestion
                 $gestionFee = \App\Models\Order::calcGestionFee($cartTotal);
                 $totalConGestion = round($cartTotal + $gestionFee, 2);
+                $previewSubtotalLw = (float) $this->subtotal + (float) $this->vat;
+                $previewProductTypeLw = optional($this->items->first()?->product)->type ?? 'all';
             @endphp
             <div class="border-t-2 border-algeciras-black/20 pt-3 space-y-1 text-sm text-algeciras-black/85">
                 <div class="flex justify-between"><span>Subtotal</span><span>{{ number_format($this->subtotal, 2, ',', '.') }}€</span></div>
                 <div class="flex justify-between text-algeciras-gray"><span>IVA incluido</span><span>{{ number_format($this->vat, 2, ',', '.') }}€</span></div>
+
+                {{-- Línea descuento (oculta hasta aplicar cupón) --}}
+                <div id="order-discount-line" class="flex justify-between text-green-600 hidden">
+                    <span>Descuento</span>
+                    <span id="order-discount-amount" class="font-display whitespace-nowrap">−0,00€</span>
+                </div>
+
                 @if ($gestionFee > 0)
                     <div class="flex justify-between">
                         <span class="flex items-center gap-1">Gastos de gestión <span class="text-xs text-algeciras-gray">(5%)</span></span>
@@ -122,16 +134,40 @@
                     </div>
                 @endif
             </div>
+
+            {{-- Caja del cupón de descuento --}}
+            <div class="border-t border-algeciras-black/10 pt-3 mt-3"
+                 x-data='couponBoxLw(@json([
+                     "subtotal" => $previewSubtotalLw,
+                     "total"    => $totalConGestion,
+                     "type"     => $previewProductTypeLw,
+                 ]))'
+                 wire:ignore>
+                <label class="font-display tracking-widest uppercase text-xs">Código de descuento</label>
+                <div class="flex gap-2 mt-2">
+                    <input x-model="code" type="text"
+                           class="flex-1 px-3 py-2 bg-white border-2 border-algeciras-black/10 focus:border-algeciras-red focus:outline-none transition font-mono uppercase text-sm"
+                           placeholder="ALGECIRAS25" :disabled="applied">
+                    <button type="button" @click="apply" :disabled="loading || applied || !code"
+                            class="px-4 py-2 bg-algeciras-black text-white font-display tracking-wider uppercase text-xs hover:bg-algeciras-red transition disabled:opacity-50">
+                        <span x-show="!applied">Aplicar</span>
+                        <span x-show="applied">✓ Aplicado</span>
+                    </button>
+                </div>
+                <p x-show="error" x-text="error" class="text-xs text-algeciras-red mt-1"></p>
+                <p x-show="applied && message" x-text="message" class="text-xs text-green-600 mt-1"></p>
+            </div>
+
             <div class="border-t-2 border-algeciras-black pt-3 mt-3 mb-4 flex justify-between items-baseline">
                 <span class="font-display text-xl uppercase">Total</span>
-                <span class="font-display text-3xl text-algeciras-red">{{ number_format($totalConGestion, 2, ',', '.') }}€</span>
+                <span class="font-display text-3xl text-algeciras-red" id="order-total-amount">{{ number_format($totalConGestion, 2, ',', '.') }}€</span>
             </div>
 
             @if ($clientSecret)
                 {{-- Botón "Pagar" gestionado por Stripe.js (no Livewire) --}}
                 <button type="button" id="pay-now-btn"
                         class="w-full px-6 py-4 bg-algeciras-red hover:bg-algeciras-red-dark text-white font-display tracking-widest uppercase shadow-brutal hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition disabled:opacity-50">
-                    <span id="pay-now-label">💳 Pagar {{ number_format($totalConGestion, 2, ',', '.') }}€</span>
+                    <span id="pay-now-label">💳 Pagar <span id="pay-now-total">{{ number_format($totalConGestion, 2, ',', '.') }}€</span></span>
                     <span id="pay-now-spinner" class="hidden">Procesando…</span>
                 </button>
             @else
@@ -189,5 +225,78 @@
             })();
         </script>
     @endif
+
+    {{-- Cupón descuento: AJAX a /api/checkout/coupon/preview --}}
+    <script>
+        if (typeof window.couponBoxLw === 'undefined') {
+            window.couponBoxLw = function (ctx) {
+                const ORDER_SUBTOTAL = Number(ctx?.subtotal) || 0;
+                const ORDER_TOTAL    = Number(ctx?.total)    || 0;
+                const PRODUCT_TYPE   = ctx?.type || 'all';
+                const CSRF_TOKEN     = document.querySelector('meta[name=csrf-token]')?.content || '';
+
+                return {
+                    code: '',
+                    loading: false,
+                    applied: false,
+                    error: '',
+                    message: '',
+                    async apply() {
+                        this.loading = true;
+                        this.error = '';
+                        this.message = '';
+                        try {
+                            const resp = await fetch('/api/checkout/coupon/preview', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Accept': 'application/json',
+                                    'X-CSRF-TOKEN': CSRF_TOKEN,
+                                    'X-Requested-With': 'XMLHttpRequest',
+                                },
+                                body: JSON.stringify({
+                                    code: this.code.trim().toUpperCase(),
+                                    subtotal: ORDER_SUBTOTAL,
+                                    product_type: PRODUCT_TYPE,
+                                }),
+                            });
+                            const data = await resp.json();
+                            if (resp.ok && data.valid) {
+                                const discount = Number(data.discount_amount) || 0;
+                                this.applied = true;
+                                this.message = `Cupón aplicado: -${discount.toFixed(2)}€`;
+
+                                const line = document.getElementById('order-discount-line');
+                                const amt  = document.getElementById('order-discount-amount');
+                                if (line && amt) {
+                                    line.classList.remove('hidden');
+                                    amt.textContent = `−${discount.toFixed(2).replace('.', ',')}€`;
+                                }
+
+                                const newTotal = Math.max(0, ORDER_TOTAL - discount);
+                                const totalEl  = document.getElementById('order-total-amount');
+                                if (totalEl) totalEl.textContent = `${newTotal.toFixed(2).replace('.', ',')}€`;
+                                const payTotal = document.getElementById('pay-now-total');
+                                if (payTotal) payTotal.textContent = `${newTotal.toFixed(2).replace('.', ',')}€`;
+
+                                // Empujar a Livewire (componente CheckoutForm.coupon_code)
+                                const hidden = document.getElementById('coupon-hidden-input');
+                                if (hidden) {
+                                    hidden.value = this.code.trim().toUpperCase();
+                                    hidden.dispatchEvent(new Event('input', { bubbles: true }));
+                                    hidden.dispatchEvent(new Event('change', { bubbles: true }));
+                                }
+                            } else {
+                                this.error = data.message || 'Código no válido';
+                            }
+                        } catch (e) {
+                            this.error = 'Error al validar el cupón';
+                        }
+                        this.loading = false;
+                    }
+                };
+            };
+        }
+    </script>
 @endif
 </div>
