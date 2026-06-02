@@ -69,6 +69,16 @@ class AuthController extends Controller
     /** POST /api/user/create — registro */
     public function register(Request $request)
     {
+        // Aceptamos tanto keys EN (name, last_name, phone) como ES (nombre,
+        // apellidos, telefono, dni) — la app móvil envía las ES, la web las EN.
+        // Normalizamos antes de validar para que `validate()` tenga keys EN.
+        $request->merge([
+            'name'       => $request->input('name', $request->input('nombre')),
+            'last_name'  => $request->input('last_name', $request->input('apellidos')),
+            'phone'      => $request->input('phone', $request->input('telefono')),
+            'dni'        => $request->input('dni'),
+        ]);
+
         $data = $request->validate([
             'name'       => 'required|string|max:120',
             'email'      => 'required|email|unique:users,email',
@@ -76,6 +86,14 @@ class AuthController extends Controller
             'first_name' => 'nullable|string|max:80',
             'last_name'  => 'nullable|string|max:80',
             'phone'      => 'nullable|string|max:32',
+            'dni'        => 'nullable|string|max:24|unique:customers,dni',
+        ], [
+            'email.unique'    => 'Ya existe una cuenta con este email. Inicia sesión o recupera tu contraseña.',
+            'dni.unique'      => 'Ya existe una cuenta con este DNI. Si crees que es un error, contacta con el club.',
+            'password.min'    => 'La contraseña debe tener al menos 6 caracteres.',
+            'name.required'   => 'Tu nombre es obligatorio.',
+            'email.required'  => 'Tu email es obligatorio.',
+            'email.email'     => 'El email no parece válido.',
         ]);
 
         $user = User::create([
@@ -90,6 +108,7 @@ class AuthController extends Controller
             'first_name' => $data['first_name'] ?? $data['name'],
             'last_name'  => $data['last_name']  ?? '',
             'phone'      => $data['phone']      ?? null,
+            'dni'        => $data['dni']        ?? null,
         ]);
 
         $token = $user->createToken('app-registro')->plainTextToken;
