@@ -46,4 +46,31 @@ return [
         ],
     ],
 
+    /*
+    | Apple Wallet — generación de .pkpass para abonos.
+    | Requiere certificado Pass Type ID + WWDR. Ver docs/WALLET_SETUP.md.
+    */
+    'apple_wallet' => [
+        'pass_type_identifier' => env('APPLE_WALLET_PASS_TYPE_IDENTIFIER', 'pass.es.algecirascf.abonos'),
+        'team_identifier'      => env('APPLE_WALLET_TEAM_IDENTIFIER'),
+        'organization_name'    => env('APPLE_WALLET_ORG_NAME', 'Algeciras CF'),
+        'certificate_path'     => env('APPLE_WALLET_CERT_PATH', storage_path('app/wallet/passcert.p12')),
+        'certificate_password' => env('APPLE_WALLET_CERT_PASSWORD'),
+        'wwdr_path'            => env('APPLE_WALLET_WWDR_PATH', storage_path('app/wallet/AppleWWDRCA.pem')),
+    ],
+
+    /*
+    | Google Wallet — JWT firmado con cuenta de servicio.
+    | Requiere project + Wallet Object Issuer en Google Cloud.
+    */
+    'google_wallet' => [
+        'service_account_json_path' => env(
+            'GOOGLE_WALLET_SA_JSON_PATH',
+            storage_path('app/wallet/google-service-account.json')
+        ),
+        'issuer_id'    => env('GOOGLE_WALLET_ISSUER_ID'),
+        'class_suffix' => env('GOOGLE_WALLET_CLASS_SUFFIX', 'abonos_2526'),
+        'origin'       => env('GOOGLE_WALLET_ORIGIN', env('APP_URL', 'https://algecirascf.hawkins.es')),
+    ],
+
 ];

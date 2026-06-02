@@ -27,6 +27,27 @@ api.interceptors.request.use((cfg) => {
   return cfg;
 });
 
+// Si el backend rechaza el token (caducado, revocado, scope inválido),
+// limpiamos credenciales locales y redirigimos a /login para forzar
+// reautenticación del operador.
+api.interceptors.response.use(
+  (resp) => resp,
+  (err: AxiosError) => {
+    const status = err.response?.status;
+    if (status === 401 || status === 403) {
+      try {
+        const auth = useAuthStore();
+        if (auth.isAuthenticated) {
+          auth.logout();
+        }
+      } catch {
+        // pinia / router may not be available; ignore
+      }
+    }
+    return Promise.reject(err);
+  }
+);
+
 export interface ValidationOk {
   valid: true;
   type: 'abono' | 'entrada';

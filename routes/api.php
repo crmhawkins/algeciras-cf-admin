@@ -7,10 +7,12 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CheckoutController;
 use App\Http\Controllers\Api\FanzoneController;
 use App\Http\Controllers\Api\MyAccountController;
+use App\Http\Controllers\Api\OperatorAuthController;
 use App\Http\Controllers\Api\PublicController;
 use App\Http\Controllers\Api\SocioController;
 use App\Http\Controllers\Api\StadiumApiController;
 use App\Http\Controllers\Api\ValidatorController;
+use App\Http\Controllers\Api\WalletController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -118,6 +120,7 @@ Route::get('/app/version', [AppVersionController::class, 'current']);
 | GET  /api/admin/matches/{id}/stats — aforo live por sector.
 | Las dos requieren TODO middleware('auth:sanctum') + scope:operator.
 */
+Route::post('/operator/login',                   [OperatorAuthController::class, 'login']);
 Route::post('/validar-qr',                       [ValidatorController::class, 'validate']);
 Route::get ('/admin/matches/{match}/stats',      [ValidatorController::class, 'matchStats']);
 
@@ -156,7 +159,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get ('/me/orders',             [MyAccountController::class, 'misPedidos']);
 
     // QR rotativo del abono para un partido concreto
-    Route::get ('/me/abonos/{ticket}/qr', [AbonoMatchQrController::class, 'forMatch']);
+    Route::get ('/me/abonos/{ticket}/qr',             [AbonoMatchQrController::class, 'forMatch']);
+
+    // Apple Wallet + Google Wallet (lock screen QR)
+    Route::get ('/me/abonos/{ticket}/apple-wallet',   [WalletController::class, 'appleWallet']);
+    Route::get ('/me/abonos/{ticket}/google-wallet',  [WalletController::class, 'googleWallet']);
 
     // Cupones, preferencias notificaciones, actividad
     Route::get ('/socio/cupones',                [SocioController::class, 'cupones']);

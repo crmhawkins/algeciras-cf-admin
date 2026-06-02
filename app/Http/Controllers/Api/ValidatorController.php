@@ -12,6 +12,7 @@ use App\Services\QrService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -21,16 +22,44 @@ use Illuminate\Support\Facades\DB;
  * GET  /v/{token}                -> landing pública (cámara genérica del móvil)
  * GET  /api/admin/matches/{m}/stats -> aforo live para dashboard de control
  *
- * TODO: añadir middleware('auth:sanctum') + scope:operator cuando exista el
- * token de operador de puerta. Mientras la PWA esté en desarrollo se deja
- * abierto (la red interna del estadio + el HMAC del propio QR ya filtran).
+ * Auth: los endpoints `validate` y `matchStats` exigen Bearer token Sanctum
+ * con ability `scope:operator` (emitida por `OperatorAuthController::login`).
+ * Se comprueba dentro del método para no tener que envolver la ruta en un
+ * middleware extra. La landing pública `showPublic` queda abierta a propósito.
  */
 class ValidatorController extends Controller
 {
     public function __construct(private QrService $qrService) {}
 
+    /**
+     * Comprueba que la request lleva token Sanctum válido con scope:operator.
+     * Devuelve `null` si todo OK, o un JsonResponse con el error si no.
+     *
+     * Resuelve el usuario explícitamente via guard `sanctum` porque la ruta
+     * NO usa el middleware `auth:sanctum` (queremos controlar el formato
+     * de error desde aquí, no el default de Laravel). Después fija el
+     * usuario en la request para que el resto del controller pueda usar
+     * `$request->user()` con normalidad.
+     */
+    private function ensureOperatorScope(Request $request): ?JsonResponse
+    {
+        $user = Auth::guard('sanctum')->user();
+        if (! $user) {
+            return response()->json(['message' => 'No autenticado'], 401);
+        }
+        if (! $user->tokenCan('scope:operator')) {
+            return response()->json(['message' => 'Sin permiso'], 403);
+        }
+        $request->setUserResolver(fn () => $user);
+        return null;
+    }
+
     public function validate(Request $request): JsonResponse
     {
+        if ($deny = $this->ensureOperatorScope($request)) {
+            return $deny;
+        }
+
         $data = $request->validate([
             'token'    => ['required', 'string'],
             'match_id' => ['required', 'integer'],
@@ -208,11 +237,16 @@ class ValidatorController extends Controller
     /**
      * Stats LIVE de aforo de un partido, agrupadas por sector.
      *
-     * TODO: middleware('auth:sanctum') + role:admin cuando esté listo el
-     * panel de control del aforo. De momento abierto en LAN del estadio.
+     * Auth: requiere Bearer Sanctum con ability `scope:operator`.
+     * El admin del CRM también puede consultar estas stats (admin emite
+     * tokens con el mismo scope via OperatorAuthController).
      */
-    public function matchStats(FootballMatch $match): JsonResponse
+    public function matchStats(Request $request, FootballMatch $match): JsonResponse
     {
+        if ($deny = $this->ensureOperatorScope($request)) {
+            return $deny;
+        }
+
         $totalCapacity = (int) Sector::sum('capacity');
         $entered       = (int) Attendance::where('match_id', $match->id)->count();
 

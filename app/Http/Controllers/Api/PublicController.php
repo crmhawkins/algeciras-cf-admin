@@ -47,11 +47,22 @@ class PublicController extends Controller
     /** GET /api/players?position=portero */
     public function players(Request $request)
     {
+        $isSpanish = $request->is('api/jugadores*');
+
         $q = Player::query()->active()->orderBy('sort_order')->orderBy('dorsal');
         if ($pos = $request->query('position')) {
             $q->where('position', $pos);
         }
-        return PlayerResource::collection($q->get());
+
+        $players = $q->get();
+
+        if ($isSpanish) {
+            return response()->json([
+                'jugadores' => $players->map(fn ($p) => $this->mapJugador($p))->values(),
+            ]);
+        }
+
+        return PlayerResource::collection($players);
     }
 
     public function player(Player $player)
@@ -66,6 +77,13 @@ class PublicController extends Controller
     public function playerById(int $id)
     {
         $player = Player::findOrFail($id);
+
+        if (request()->is('api/jugadores*')) {
+            $row = $this->mapJugador($player);
+            $row['bio'] = $player->getTranslations('bio');
+            return response()->json($row);
+        }
+
         return new PlayerResource($player);
     }
 
@@ -452,6 +470,53 @@ class PublicController extends Controller
             'jornada'         => $m->matchday,
             'estado'          => $m->status,
         ];
+    }
+
+    /**
+     * Transforma un Player a la shape ES esperada por la app:
+     *   { id, dorsal, nombre, apellidos, posicion, foto, nacionalidad,
+     *     edad, capitan, slug }
+     *
+     * Heurística nombre/apellidos: primer token = nombre, resto = apellidos.
+     */
+    private function mapJugador(Player $p): array
+    {
+        $name = (string) ($p->display_name ?? $p->full_name ?? '');
+        $parts = explode(' ', trim($name), 2);
+        $nombre    = $parts[0] ?? '';
+        $apellidos = $parts[1] ?? '';
+
+        return [
+            'id'           => $p->id,
+            'dorsal'       => $p->dorsal,
+            'nombre'       => $nombre,
+            'apellidos'    => $apellidos,
+            'posicion'     => $this->posicionDbToApp($p->position),
+            'foto'         => $p->photo ? url($p->photo) : null,
+            'nacionalidad' => $p->nationality,
+            'edad'         => $p->age,
+            'capitan'      => (bool) $p->captain,
+            'slug'         => $p->slug,
+        ];
+    }
+
+    /**
+     * Traduce la posición del campo `position` (DB) al label en español
+     * usado por la app móvil. Soporta valores largos (`portero`,
+     * `defensa`, `centrocampista`, `delantero`) o single-letter
+     * (G/D/M/F).
+     */
+    private function posicionDbToApp(?string $pos): string
+    {
+        if (!$pos) return '';
+        $key = strtolower(trim($pos));
+        return match ($key) {
+            'portero', 'g', 'gk', 'goalkeeper'        => 'Portero',
+            'defensa', 'd', 'df', 'defender'          => 'Defensa',
+            'centrocampista', 'm', 'mf', 'midfielder' => 'Centrocampista',
+            'delantero', 'f', 'fw', 'forward'         => 'Delantero',
+            default                                   => ucfirst($pos),
+        };
     }
 
     /**

@@ -1,30 +1,32 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 
 const auth = useAuthStore();
 const router = useRouter();
 
-const operatorName = ref('');
-const pin = ref('');
-const error = ref('');
+const email = ref('');
+const password = ref('');
+const localError = ref('');
 
-function submit() {
-  error.value = '';
-  if (!operatorName.value.trim()) {
-    error.value = 'Introduce tu nombre';
+const error = computed(() => localError.value || auth.error);
+const loading = computed(() => auth.loading);
+
+async function submit() {
+  localError.value = '';
+  if (!email.value.trim()) {
+    localError.value = 'Introduce tu email';
     return;
   }
-  if (!/^\d{4,8}$/.test(pin.value)) {
-    error.value = 'PIN invalido';
+  if (!password.value) {
+    localError.value = 'Introduce tu contraseña';
     return;
   }
-  if (!auth.login(operatorName.value, pin.value)) {
-    error.value = 'Credenciales incorrectas';
-    return;
+  const ok = await auth.login(email.value, password.value);
+  if (ok) {
+    router.replace({ name: 'matches' });
   }
-  router.replace({ name: 'matches' });
 }
 </script>
 
@@ -41,25 +43,24 @@ function submit() {
 
       <form @submit.prevent="submit" class="space-y-4 bg-neutral-900 p-6 rounded-lg border border-neutral-800">
         <div>
-          <label class="block text-xs uppercase text-neutral-400 mb-1">Nombre del operador</label>
+          <label class="block text-xs uppercase text-neutral-400 mb-1">Email</label>
           <input
-            v-model="operatorName"
-            type="text"
-            autocomplete="off"
+            v-model="email"
+            type="email"
+            autocomplete="username"
+            inputmode="email"
             class="w-full bg-neutral-800 border border-neutral-700 rounded-md px-3 py-3 text-white text-lg focus:outline-none focus:border-cf-red"
-            placeholder="Ej: Juan Garcia"
+            placeholder="operador@algecirascf.es"
           />
         </div>
         <div>
-          <label class="block text-xs uppercase text-neutral-400 mb-1">PIN</label>
+          <label class="block text-xs uppercase text-neutral-400 mb-1">Contraseña</label>
           <input
-            v-model="pin"
+            v-model="password"
             type="password"
-            inputmode="numeric"
-            maxlength="8"
-            autocomplete="off"
-            class="w-full bg-neutral-800 border border-neutral-700 rounded-md px-3 py-3 text-white text-2xl tracking-widest text-center focus:outline-none focus:border-cf-red"
-            placeholder="****"
+            autocomplete="current-password"
+            class="w-full bg-neutral-800 border border-neutral-700 rounded-md px-3 py-3 text-white text-lg focus:outline-none focus:border-cf-red"
+            placeholder="********"
           />
         </div>
 
@@ -67,14 +68,15 @@ function submit() {
 
         <button
           type="submit"
-          class="w-full bg-cf-red hover:bg-red-700 text-white font-bold py-3 rounded-md uppercase tracking-wider"
+          :disabled="loading"
+          class="w-full bg-cf-red hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-md uppercase tracking-wider"
         >
-          Entrar
+          {{ loading ? 'Entrando…' : 'Entrar' }}
         </button>
       </form>
 
       <p class="text-center text-xs text-neutral-600 mt-6">
-        Auth provisional - migrar a Sanctum
+        Autenticación segura · Sanctum
       </p>
     </div>
   </div>
