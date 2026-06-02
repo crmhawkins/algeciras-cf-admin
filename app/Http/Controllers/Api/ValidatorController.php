@@ -3,17 +3,27 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Attendance;
+use App\Models\FootballMatch;
+use App\Models\Sector;
+use App\Models\Season;
 use App\Models\Ticket;
 use App\Services\QrService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Validador de QRs en la puerta del estadio.
  *
- * POST /api/validar-qr  -> JSON con resultado (lector de la app/PWA)
- * GET  /v/{token}       -> landing pública (alguien escanea con cámara genérica)
+ * POST /api/validar-qr           -> JSON con resultado (lector de la app/PWA)
+ * GET  /v/{token}                -> landing pública (cámara genérica del móvil)
+ * GET  /api/admin/matches/{m}/stats -> aforo live para dashboard de control
+ *
+ * TODO: añadir middleware('auth:sanctum') + scope:operator cuando exista el
+ * token de operador de puerta. Mientras la PWA esté en desarrollo se deja
+ * abierto (la red interna del estadio + el HMAC del propio QR ya filtran).
  */
 class ValidatorController extends Controller
 {
@@ -23,84 +33,161 @@ class ValidatorController extends Controller
     {
         $data = $request->validate([
             'token'    => ['required', 'string'],
-            'match_id' => ['nullable', 'integer'],
+            'match_id' => ['required', 'integer'],
+            'gate_id'  => ['nullable', 'string', 'max:32'],
         ]);
 
-        $result = $this->qrService->verifyToken($data['token']);
-
-        if (! $result || ! ($result['valid'] ?? false)) {
+        $r = $this->qrService->verifyToken($data['token']);
+        if (! $r || ! ($r['valid'] ?? false)) {
             return response()->json([
                 'valid'   => false,
-                'message' => 'QR no válido ('.($result['reason'] ?? 'desconocido').').',
+                'reason'  => $r['reason'] ?? 'invalid',
+                'message' => 'QR no válido',
             ], 422);
         }
 
-        $ticket = Ticket::with(['customer', 'zone', 'product'])
-            ->find($result['ticket_id']);
+        $ticket = Ticket::with(['customer', 'product', 'zone', 'match', 'orderItem.order'])
+            ->find($r['ticket_id']);
 
         if (! $ticket) {
             return response()->json([
                 'valid'   => false,
-                'message' => 'Ticket no encontrado.',
+                'reason'  => 'ticket_not_found',
+                'message' => 'Ticket no encontrado',
             ], 404);
         }
 
-        if (! in_array($ticket->status, ['issued', 'used'], true)) {
+        $order = $ticket->orderItem?->order;
+        if (! $order || $order->status !== 'paid') {
             return response()->json([
                 'valid'   => false,
-                'message' => 'Ticket en estado no admitido: '.$ticket->status,
+                'reason'  => 'not_paid',
+                'message' => 'Ticket no pagado',
             ], 422);
         }
 
-        if ($ticket->status === 'used') {
+        if (in_array($ticket->status, ['cancelled', 'refunded'], true)) {
             return response()->json([
                 'valid'   => false,
-                'message' => 'QR ya usado el '.optional($ticket->used_at)->format('d/m/Y H:i').'.',
-                'ticket'  => $this->ticketPayload($ticket),
-            ], 409);
+                'reason'  => 'cancelled',
+                'message' => 'Ticket cancelado o reembolsado',
+            ], 422);
         }
 
-        // Para entradas exigimos que el match_id del QR coincida con el del partido
-        // que se está validando (si el lector lo manda). Esto evita reentradas con
-        // QR de un partido anterior si el cliente no rotó el secret.
-        if ($result['type'] === 'entrada') {
-            if (! empty($data['match_id']) && (int) $data['match_id'] !== (int) $result['match_id']) {
+        $matchId = (int) $data['match_id'];
+        $gateId  = $data['gate_id'] ?? null;
+        $userId  = $request->user()?->id;
+        $type    = $ticket->product?->type;
+
+        // ---------------- ABONO ----------------
+        if ($type === 'abono') {
+            $currentSeason = Season::current();
+            if ($currentSeason && $ticket->season_id && (int) $ticket->season_id !== (int) $currentSeason->id) {
                 return response()->json([
                     'valid'   => false,
-                    'message' => 'Este QR no corresponde al partido de hoy.',
+                    'reason'  => 'wrong_season',
+                    'message' => 'Abono de otra temporada',
                 ], 422);
             }
-            if ($ticket->match_id && (int) $ticket->match_id !== (int) $result['match_id']) {
+
+            // Si el QR es v2 (rotativo) el match_id va firmado dentro del token
+            // y debe coincidir con el partido que el operador está marcando.
+            if (($r['payload_version'] ?? null) === 'v2'
+                && isset($r['match_id_from_token'])
+                && (int) $r['match_id_from_token'] !== $matchId) {
                 return response()->json([
                     'valid'   => false,
-                    'message' => 'El QR está caducado (partido distinto).',
+                    'reason'  => 'wrong_match_token',
+                    'message' => 'Este QR es de otro partido',
                 ], 422);
             }
+
+            return $this->registerAttendance($ticket, $matchId, $userId, $gateId, 'abono');
         }
 
-        // Marca como usado. NOTA: el campo used_at ya está en la migración
-        // original de tickets; si en algún entorno no existiera, hay que
-        // añadirlo manualmente (no se intenta crear desde aquí).
-        if (Schema::hasColumn('tickets', 'used_at')) {
-            $ticket->used_at = now();
+        // ---------------- ENTRADA ----------------
+        if ($type === 'entrada') {
+            if ($ticket->match_id && (int) $ticket->match_id !== $matchId) {
+                return response()->json([
+                    'valid'   => false,
+                    'reason'  => 'wrong_match',
+                    'message' => 'Esta entrada es de otro partido',
+                ], 422);
+            }
+            if (isset($r['match_id_from_token']) && (int) $r['match_id_from_token'] !== $matchId) {
+                return response()->json([
+                    'valid'   => false,
+                    'reason'  => 'wrong_match_token',
+                    'message' => 'Este QR es de otro partido',
+                ], 422);
+            }
+            if ($ticket->status === 'used') {
+                return response()->json([
+                    'valid'   => false,
+                    'reason'  => 'already_used',
+                    'message' => 'QR ya usado',
+                ], 409);
+            }
+
+            return DB::transaction(function () use ($ticket, $matchId, $userId, $gateId) {
+                $ticket->status  = 'used';
+                $ticket->used_at = now();
+                if ($userId) {
+                    $ticket->used_by_admin_id = $userId;
+                }
+                $ticket->save();
+
+                return $this->registerAttendance($ticket, $matchId, $userId, $gateId, 'entrada');
+            });
         }
-        $ticket->status = 'used';
-        if (Schema::hasColumn('tickets', 'used_by_admin_id') && $request->user()) {
-            $ticket->used_by_admin_id = $request->user()->id;
-        }
-        $ticket->save();
 
         return response()->json([
-            'valid'   => true,
-            'message' => 'Acceso autorizado.',
-            'ticket'  => $this->ticketPayload($ticket),
+            'valid'   => false,
+            'reason'  => 'unsupported_product_type',
+            'message' => 'Tipo de producto no admite acceso',
+        ], 422);
+    }
+
+    /**
+     * Inserta el Attendance respetando la UNIQUE(ticket_id, match_id):
+     * si ya existía, devuelve "already_entered_match" (no permite reentrada).
+     */
+    private function registerAttendance(Ticket $ticket, int $matchId, ?int $userId, ?string $gateId, string $type): JsonResponse
+    {
+        try {
+            $att = Attendance::create([
+                'ticket_id'          => $ticket->id,
+                'match_id'           => $matchId,
+                'scanned_at'         => now(),
+                'scanned_by_user_id' => $userId,
+                'gate_id'            => $gateId,
+            ]);
+        } catch (QueryException $e) {
+            // 23000 = integrity constraint violation (UNIQUE en ticket+match).
+            if ($e->getCode() === '23000') {
+                return response()->json([
+                    'valid'   => false,
+                    'reason'  => 'already_entered_match',
+                    'message' => 'Ya entró a este partido',
+                    'ticket'  => $this->ticketPayload($ticket),
+                ], 409);
+            }
+            throw $e;
+        }
+
+        return response()->json([
+            'valid'         => true,
+            'type'          => $type,
+            'attendance_id' => $att->id,
+            'ticket'        => $this->ticketPayload($ticket),
+            'message'       => 'Acceso autorizado',
         ]);
     }
 
     /**
-     * Landing pública para cuando alguien escanea el QR con una cámara
-     * cualquiera (sin la app de control). Muestra OK/KO informativo,
-     * NO marca el ticket como usado para no quemarlo por error.
+     * Landing pública para cuando alguien escanea el QR con cámara
+     * genérica. Muestra OK/KO informativo, NO marca como usado ni
+     * registra Attendance.
      */
     public function showPublic(string $token)
     {
@@ -118,18 +205,100 @@ class ValidatorController extends Controller
         ]);
     }
 
+    /**
+     * Stats LIVE de aforo de un partido, agrupadas por sector.
+     *
+     * TODO: middleware('auth:sanctum') + role:admin cuando esté listo el
+     * panel de control del aforo. De momento abierto en LAN del estadio.
+     */
+    public function matchStats(FootballMatch $match): JsonResponse
+    {
+        $totalCapacity = (int) Sector::sum('capacity');
+        $entered       = (int) Attendance::where('match_id', $match->id)->count();
+
+        // Por sector: cruzamos attendance -> ticket -> zone -> sector (por zone slug/name).
+        // Como en este proyecto la relación canónica es ticket.zone (Zone),
+        // y sectors.zone es un string (tribuna_baja, fondo_norte...), agrupamos
+        // por sector.zone y sumamos capacity por grupo para tener cifras
+        // comparables con `entered`.
+        $bySector = DB::table('attendances')
+            ->join('tickets', 'tickets.id', '=', 'attendances.ticket_id')
+            ->leftJoin('zones', 'zones.id', '=', 'tickets.zone_id')
+            ->where('attendances.match_id', $match->id)
+            ->select('zones.slug as zone_slug', 'zones.name as zone_name', DB::raw('COUNT(*) as entered'))
+            ->groupBy('zones.slug', 'zones.name')
+            ->get();
+
+        // Capacidad por sector.zone (string). Usamos suma de capacity por
+        // grupo para una vista "zona del estadio -> aforo".
+        $capacityByZone = Sector::select('zone', DB::raw('SUM(capacity) as capacity'))
+            ->groupBy('zone')
+            ->pluck('capacity', 'zone')
+            ->toArray();
+
+        $bySectorOut = $bySector->map(function ($row) use ($capacityByZone) {
+            $slug = $row->zone_slug ?? 'desconocida';
+            $cap  = (int) ($capacityByZone[$slug] ?? 0);
+            $ent  = (int) $row->entered;
+            return [
+                'sector_name' => $row->zone_name ?? $slug,
+                'sector_slug' => $slug,
+                'capacity'    => $cap,
+                'entered'     => $ent,
+                'percent'     => $cap > 0 ? round($ent * 100 / $cap, 1) : null,
+            ];
+        })->values();
+
+        return response()->json([
+            'match_id'        => $match->id,
+            'kickoff_at'      => $match->kickoff_at?->toIso8601String(),
+            'total_capacity'  => $totalCapacity,
+            'entered'         => $entered,
+            'percent'         => $totalCapacity > 0 ? round($entered * 100 / $totalCapacity, 1) : null,
+            'by_sector'       => $bySectorOut,
+            'last_updated_at' => now()->toIso8601String(),
+        ]);
+    }
+
     private function ticketPayload(Ticket $ticket): array
     {
         $customer = $ticket->customer;
         $zone     = $ticket->zone;
+        $product  = $ticket->product;
+        $match    = $ticket->match;
+        $season   = $ticket->season;
+        $itemMeta = $ticket->orderItem?->meta ?? [];
+
+        $fila    = $ticket->row    ?? ($itemMeta['fila'] ?? ($itemMeta['row'] ?? null));
+        $asiento = $ticket->number ?? $ticket->seat_number ?? ($itemMeta['asiento'] ?? ($itemMeta['seat'] ?? null));
+
+        $matchLabel = null;
+        if ($match) {
+            $matchLabel = sprintf(
+                'J%s vs %s',
+                $match->matchday ?? '?',
+                $match->opponent ?? '?',
+            );
+        }
+
+        $typeLabel = match ($product?->type) {
+            'abono'   => 'Abono',
+            'entrada' => 'Entrada',
+            default   => $product?->type ?? null,
+        };
 
         return [
+            'id'            => $ticket->id,
             'customer_name' => $customer
                 ? trim(($customer->first_name ?? '').' '.($customer->last_name ?? ''))
                 : ($ticket->holder_name ?? null),
-            'zone'    => $zone?->name,
-            'fila'    => $ticket->row    ?? null,
-            'asiento' => $ticket->number ?? $ticket->seat_number ?? null,
+            'holder_dni'    => $ticket->holder_dni,
+            'zone'          => $zone ? ['name' => $zone->name] : null,
+            'fila'          => $fila,
+            'asiento'       => $asiento,
+            'match_label'   => $matchLabel,
+            'type_label'    => $typeLabel,
+            'season_name'   => $season?->name,
         ];
     }
 }

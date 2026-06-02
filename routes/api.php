@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AbonadosController;
+use App\Http\Controllers\Api\AbonoMatchQrController;
 use App\Http\Controllers\Api\AppVersionController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CheckoutController;
@@ -110,13 +111,15 @@ Route::get('/app/version', [AppVersionController::class, 'current']);
 
 /*
 |--------------------------------------------------------------------------
-| Validador de QR (escaneo en puerta del estadio)
+| Validador de QR + Aforo en directo (PWA puerta del estadio)
 |--------------------------------------------------------------------------
-| POST /api/validar-qr — marca ticket como used. Llamado por la PWA/app del
-| personal de puerta. El GET público /v/{token} vive en routes/web.php
-| y solo muestra resultado (no muta estado).
+| POST /api/validar-qr — abono: idempotente per-match (UNIQUE attendances).
+|                        entrada: 1 vez → marca used.
+| GET  /api/admin/matches/{id}/stats — aforo live por sector.
+| Las dos requieren TODO middleware('auth:sanctum') + scope:operator.
 */
-Route::post('/validar-qr', [ValidatorController::class, 'validate']);
+Route::post('/validar-qr',                       [ValidatorController::class, 'validate']);
+Route::get ('/admin/matches/{match}/stats',      [ValidatorController::class, 'matchStats']);
 
 /*
 |--------------------------------------------------------------------------
@@ -151,6 +154,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get ('/entradas/usuario/{id}', [MyAccountController::class, 'entradasUsuario'])->whereNumber('id');
     Route::post('/abonos/liberar',        [MyAccountController::class, 'liberarAbono']);
     Route::get ('/me/orders',             [MyAccountController::class, 'misPedidos']);
+
+    // QR rotativo del abono para un partido concreto
+    Route::get ('/me/abonos/{ticket}/qr', [AbonoMatchQrController::class, 'forMatch']);
 
     // Cupones, preferencias notificaciones, actividad
     Route::get ('/socio/cupones',                [SocioController::class, 'cupones']);
