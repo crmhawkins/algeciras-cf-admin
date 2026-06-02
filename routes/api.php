@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Api\AbonadosController;
+use App\Http\Controllers\Api\AppVersionController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CheckoutController;
 use App\Http\Controllers\Api\FanzoneController;
@@ -7,6 +9,7 @@ use App\Http\Controllers\Api\MyAccountController;
 use App\Http\Controllers\Api\PublicController;
 use App\Http\Controllers\Api\SocioController;
 use App\Http\Controllers\Api\StadiumApiController;
+use App\Http\Controllers\Api\ValidatorController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -97,6 +100,32 @@ Route::get('/clasificacion', [PublicController::class, 'clasificacion']);
 Route::post('/checkout/payment-sheet',  [CheckoutController::class, 'paymentSheet']);
 Route::post('/checkout/web-redirect',   [CheckoutController::class, 'webRedirect']);
 Route::post('/checkout/sync',           [CheckoutController::class, 'sync']);
+
+/*
+|--------------------------------------------------------------------------
+| App móvil: version check + force update
+|--------------------------------------------------------------------------
+*/
+Route::get('/app/version', [AppVersionController::class, 'current']);
+
+/*
+|--------------------------------------------------------------------------
+| Validador de QR (escaneo en puerta del estadio)
+|--------------------------------------------------------------------------
+| POST /api/validar-qr — marca ticket como used. Llamado por la PWA/app del
+| personal de puerta. El GET público /v/{token} vive en routes/web.php
+| y solo muestra resultado (no muta estado).
+*/
+Route::post('/validar-qr', [ValidatorController::class, 'validate']);
+
+/*
+|--------------------------------------------------------------------------
+| Renovación de abonos (lookup por número + dni)
+|--------------------------------------------------------------------------
+| Consumido por la app móvil en RenovacionAbonoScreen.
+*/
+Route::post('/abonados/lookup',  [AbonadosController::class, 'lookup']);
+Route::post('/abonados/renovar', [AbonadosController::class, 'renovar']);
 
 /*
 |--------------------------------------------------------------------------

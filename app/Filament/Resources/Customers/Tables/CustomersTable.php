@@ -8,11 +8,14 @@ use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 
 class CustomersTable
@@ -20,62 +23,80 @@ class CustomersTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $q) => $q
+                ->withCount([
+                    'orders',
+                    'tickets as abonos_activos_count' => fn ($sub) => $sub
+                        ->whereHas('product', fn ($p) => $p->where('type', 'abono'))
+                        ->whereIn('status', ['issued', 'valid']),
+                ]))
             ->columns([
-                TextColumn::make('user_id')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('first_name')
-                    ->searchable(),
-                TextColumn::make('last_name')
-                    ->searchable(),
+                TextColumn::make('full_name')
+                    ->label('Nombre')
+                    ->searchable(query: fn (Builder $q, string $s) => $q
+                        ->where('first_name', 'like', "%{$s}%")
+                        ->orWhere('last_name', 'like', "%{$s}%"))
+                    ->sortable(query: fn (Builder $q, string $dir) => $q
+                        ->orderBy('first_name', $dir)
+                        ->orderBy('last_name', $dir)),
+
                 TextColumn::make('email')
-                    ->label('Email address')
-                    ->searchable(),
-                TextColumn::make('phone')
-                    ->searchable(),
+                    ->label('Email')
+                    ->searchable()
+                    ->copyable()
+                    ->icon('heroicon-o-envelope'),
+
                 TextColumn::make('dni')
-                    ->searchable(),
-                TextColumn::make('birth_date')
-                    ->date()
-                    ->sortable(),
-                TextColumn::make('address')
-                    ->searchable(),
-                TextColumn::make('city')
-                    ->searchable(),
-                TextColumn::make('province')
-                    ->searchable(),
-                TextColumn::make('postal_code')
-                    ->searchable(),
-                TextColumn::make('country')
-                    ->searchable(),
+                    ->label('DNI')
+                    ->searchable()
+                    ->placeholder('—'),
+
+                TextColumn::make('phone')
+                    ->label('Teléfono')
+                    ->searchable()
+                    ->placeholder('—'),
+
                 IconColumn::make('is_socio')
-                    ->boolean(),
-                TextColumn::make('socio_number')
+                    ->label('Socio')
+                    ->boolean()
+                    ->sortable(),
+
+                TextColumn::make('orders_count')
+                    ->label('# Pedidos')
                     ->numeric()
-                    ->sortable(),
-                TextColumn::make('socio_since')
-                    ->date()
-                    ->sortable(),
-                TextColumn::make('language')
-                    ->searchable(),
-                IconColumn::make('newsletter_optin')
-                    ->boolean(),
-                IconColumn::make('whatsapp_optin')
-                    ->boolean(),
-                TextColumn::make('created_at')
-                    ->dateTime()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('updated_at')
-                    ->dateTime()
+                    ->badge()
+                    ->color('info'),
+
+                TextColumn::make('abonos_activos_count')
+                    ->label('# Abonos activos')
+                    ->numeric()
+                    ->sortable()
+                    ->badge()
+                    ->color('warning'),
+
+                TextColumn::make('city')
+                    ->label('Ciudad')
+                    ->searchable()
+                    ->toggleable(),
+
+                TextColumn::make('created_at')
+                    ->dateTime('d/m/Y')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('created_at', 'desc')
             ->filters([
-                //
+                TernaryFilter::make('is_socio')
+                    ->label('Socio'),
+                TernaryFilter::make('newsletter_optin')
+                    ->label('Newsletter'),
+                TernaryFilter::make('whatsapp_optin')
+                    ->label('WhatsApp'),
             ])
             ->recordActions([
-                EditAction::make(),
+                ViewAction::make()->label('Ver'),
+                EditAction::make()->label('Editar'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

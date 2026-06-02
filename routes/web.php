@@ -6,8 +6,12 @@ use Illuminate\Support\Facades\Route;
 Route::get('/',             [PageController::class, 'home'])->name('home');
 Route::get('/equipo',       [PageController::class, 'equipo'])->name('equipo');
 Route::get('/calendario',   [PageController::class, 'calendario'])->name('calendario');
-Route::get('/tienda',       [PageController::class, 'tienda'])->name('tienda');
-Route::get('/tienda/{product:slug}', [PageController::class, 'producto'])->name('producto');
+// La tienda vive en un subdominio externo (tienda.algecirasclubdefutbol.com).
+// Mantenemos los nombres de ruta para no romper enlaces internos generados
+// con route('tienda') / route('producto'), pero redirigimos 301 al subdominio.
+Route::get('/tienda', fn () => redirect('https://tienda.algecirasclubdefutbol.com', 301))->name('tienda');
+// No tenemos mapeo de slugs en el subdominio externo: redirigimos siempre al home.
+Route::get('/tienda/{product:slug}', fn () => redirect('https://tienda.algecirasclubdefutbol.com', 301))->name('producto');
 Route::get('/abonos',       [PageController::class, 'abonos'])->name('abonos');
 Route::get('/estadio',      [\App\Http\Controllers\StadiumController::class, 'index'])->name('estadio');
 Route::get('/estadio/sector/{svgRegion}', [\App\Http\Controllers\StadiumController::class, 'sector'])->name('estadio.sector')->whereNumber('svgRegion');
@@ -53,6 +57,12 @@ Route::get('/pedido/{order:reference}', fn (\App\Models\Order $order) => view('p
 
 // Política de privacidad — requerida por App Store y Google Play.
 Route::get('/privacidad', fn () => view('pages.privacidad'))->name('privacidad');
+
+// Landing pública de QR — el QR codifica /v/{token}. NO marca como used.
+// (la API /api/validar-qr SÍ marca used; la usa la PWA de puerta).
+Route::get('/v/{token}', [\App\Http\Controllers\Api\ValidatorController::class, 'showPublic'])
+    ->where('token', '[A-Za-z0-9\-_]+')
+    ->name('qr.public');
 
 Route::get('/zona-socio', [PageController::class, 'zonaSocio'])->name('zona-socio');
 Route::get('/zona-socio/{content:slug}', [PageController::class, 'zonaSocioContent'])->name('zona-socio.content');
