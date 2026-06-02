@@ -139,8 +139,89 @@ class CheckoutController extends Controller
     }
 
     /**
-     * La app llama después de cerrar el PaymentSheet para conocer el estado real.
-     * Útil cuando el webhook todavía no ha llegado al backend.
+     * GET/POST /api/checkout/web-redirect
+     *
+     * Endpoint usado por la app móvil: crea Order pending con un único item
+     * (asiento/abono) y devuelve la URL del checkout web. La app abre esa
+     * URL en un browser (expo-web-browser), el usuario paga ahí vía Stripe
+     * Elements y al volver, la app llama a /api/checkout/sync para conocer
+     * el estado real.
+     *
+     * Body (todos opcionales — flexible para distintos flujos app):
+     *   { sectorId, asientoId, precio, dni, type: 'abono'|'entrada' }
+     *
+     * Resp: { orderReference, checkoutUrl }
+     */
+    public function webRedirect(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'sectorId'   => 'nullable|integer',
+            'asientoId'  => 'nullable|integer',
+            'precio'     => 'required|numeric|min:0.5|max:9999',
+            'dni'        => 'nullable|string|max:24',
+            'type'       => ['nullable', Rule::in(['abono','entrada','merch'])],
+        ]);
+
+        $precio = (float) $data['precio'];
+
+        // Crear Order pending mínima sin OrderItem (la creamos como ad-hoc).
+        // Cuando exista Product->id para el asiento (mapping seat→product),
+        // este endpoint lo enlazará. De momento dejamos la order con un
+        // OrderItem "abono ad-hoc" para que el total cuadre.
+        $order = DB::transaction(function () use ($precio, $data) {
+            $order = Order::create([
+                'reference'        => Order::nextReference(),
+                'guest_email'      => 'app@algecirascf.es', // TODO: usar email del usuario auth si llega Bearer
+                'status'           => 'pending',
+                'channel'          => 'web', // schema enum no incluye 'app'; usamos web (es lo más cercano)
+                'subtotal'         => round($precio / 1.21, 2),
+                'vat'              => round($precio - ($precio / 1.21), 2),
+                'shipping_cost'    => 0,
+                'total'            => $precio,
+                'currency'         => 'EUR',
+                'payment_gateway'  => 'stripe',
+                'payment_intent_id'=> null,
+                'admin_notes'      => sprintf(
+                    'App mobile: type=%s sectorId=%s asientoId=%s dni=%s',
+                    $data['type']  ?? 'abono',
+                    $data['sectorId']  ?? '?',
+                    $data['asientoId'] ?? '?',
+                    $data['dni']  ?? '-',
+                ),
+            ]);
+
+            \App\Models\OrderItem::create([
+                'order_id'      => $order->id,
+                'product_id'    => null,
+                'product_type'  => $data['type'] ?? 'abono',
+                'name'          => sprintf(
+                    'Abono Algeciras CF · Sector %s · Asiento %s',
+                    $data['sectorId']  ?? '?',
+                    $data['asientoId'] ?? '?',
+                ),
+                'sku'           => 'APP-' . ($data['asientoId'] ?? 'X'),
+                'qty'           => 1,
+                'unit_price'    => $precio,
+                'vat_rate'      => 21,
+                'subtotal'      => round($precio / 1.21, 2),
+                'vat_amount'    => round($precio - ($precio / 1.21), 2),
+                'total'         => $precio,
+            ]);
+
+            return $order;
+        });
+
+        $url = url('/pago-app/' . $order->reference);
+
+        return response()->json([
+            'orderReference' => $order->reference,
+            'checkoutUrl'    => $url,
+        ]);
+    }
+
+    /**
+     * La app llama después de cerrar el PaymentSheet o el browser para
+     * conocer el estado real. Útil cuando el webhook todavía no ha llegado.
      */
     public function sync(Request $request): JsonResponse
     {

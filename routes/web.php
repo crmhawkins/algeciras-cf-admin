@@ -58,3 +58,36 @@ Route::get('/zona-socio/{content:slug}', [PageController::class, 'zonaSocioConte
 // La exclusión CSRF se hace vía bootstrap/app.php (validateCsrfTokens->except).
 Route::post('/webhooks/stripe', [\App\Http\Controllers\StripeWebhookController::class, 'handle'])
     ->name('webhooks.stripe');
+
+// Pago iniciado desde la app móvil — abre en WebBrowser/SafariViewController.
+Route::get('/pago-app/{order:reference}', function (\App\Models\Order $order) {
+    // Crear PaymentIntent si Stripe operativo y la orden todavía está pending.
+    $clientSecret = null;
+    if ((string) config('services.stripe.secret') !== '' && $order->status === 'pending') {
+        try {
+            $intent = app(\App\Services\StripePaymentService::class)->createIntentForOrder($order);
+            $clientSecret = $intent->client_secret;
+        } catch (\Throwable $e) {
+            // si falla la creación, la vista cae al mensaje "pasarela en preparación"
+            \Log::warning('pago-app intent fail', ['err' => $e->getMessage()]);
+        }
+    }
+    return view('pages.pago-app', [
+        'order'        => $order->load('items'),
+        'clientSecret' => $clientSecret,
+    ]);
+})->name('pago-app');
+
+// Si Stripe no está configurado, el cliente confirma una "reserva sin cobro"
+// para que el club los contacte. Marca la Order como paid simulada.
+Route::post('/pago-app/{order:reference}/simulado', function (\App\Models\Order $order) {
+    if ($order->status === 'pending') {
+        app(\App\Services\CheckoutService::class)->markOrderPaid($order, 'sim_' . uniqid());
+        $order->update(['payment_gateway' => 'simulated']);
+    }
+    return redirect()->route('pago-app.exito', $order->reference);
+})->name('pago-app.simulado');
+
+Route::get('/pago-app/{order:reference}/exito', function (\App\Models\Order $order) {
+    return view('pages.pago-app-exito', ['order' => $order]);
+})->name('pago-app.exito');

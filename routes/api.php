@@ -94,8 +94,9 @@ Route::get('/clasificacion', [PublicController::class, 'clasificacion']);
 | Ambos públicos por ahora (guest checkout). Cuando se integre la sesión
 | socio, mover bajo middleware('auth:sanctum').
 */
-Route::post('/checkout/payment-sheet', [CheckoutController::class, 'paymentSheet']);
-Route::post('/checkout/sync',          [CheckoutController::class, 'sync']);
+Route::post('/checkout/payment-sheet',  [CheckoutController::class, 'paymentSheet']);
+Route::post('/checkout/web-redirect',   [CheckoutController::class, 'webRedirect']);
+Route::post('/checkout/sync',           [CheckoutController::class, 'sync']);
 
 /*
 |--------------------------------------------------------------------------
