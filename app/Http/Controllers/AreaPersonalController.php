@@ -81,24 +81,52 @@ class AreaPersonalController extends Controller
     /** POST /area-personal/register */
     public function register(Request $request)
     {
+        // Acepta tanto el form con `name` (single field) como con
+        // `first_name` + `last_name` (form más completo). DNI opcional pero
+        // valida unicidad si llega.
+        $request->merge([
+            'name'       => $request->input('name', trim(
+                $request->input('first_name', '') . ' ' . $request->input('last_name', '')
+            )) ?: null,
+        ]);
+
         $data = $request->validate([
-            'name'     => 'required|string|max:120',
-            'email'    => 'required|email|unique:users,email',
-            'password' => 'required|string|min:6|confirmed',
-            'phone'    => 'nullable|string|max:32',
+            'name'       => 'required|string|max:120',
+            'first_name' => 'nullable|string|max:80',
+            'last_name'  => 'nullable|string|max:80',
+            'email'      => 'required|email|unique:users,email',
+            'password'   => 'required|string|min:6|confirmed',
+            'phone'      => 'nullable|string|max:32',
+            'dni'        => 'nullable|string|max:24|unique:customers,dni',
+        ], [
+            'email.unique'   => 'Ya existe una cuenta con este email. Inicia sesión.',
+            'dni.unique'     => 'Ya existe una cuenta con este DNI.',
+            'password.min'   => 'La contraseña debe tener al menos 6 caracteres.',
+            'password.confirmed' => 'Las contraseñas no coinciden.',
         ]);
 
         $user = User::create([
-            'name' => $data['name'],
-            'email' => $data['email'],
+            'name'     => $data['name'],
+            'email'    => $data['email'],
             'password' => Hash::make($data['password']),
         ]);
 
+        // first_name + last_name por separado si llegan, si no hereda de name.
+        $first = $data['first_name'] ?? null;
+        $last  = $data['last_name']  ?? null;
+        if (!$first && !$last) {
+            $parts = preg_split('/\s+/', trim($data['name']), 2);
+            $first = $parts[0] ?? $data['name'];
+            $last  = $parts[1] ?? '';
+        }
+
         Customer::create([
-            'user_id' => $user->id,
-            'email' => $data['email'],
-            'first_name' => $data['name'],
-            'phone' => $data['phone'] ?? null,
+            'user_id'    => $user->id,
+            'email'      => $data['email'],
+            'first_name' => $first,
+            'last_name'  => $last ?: '',  // ← columna NOT NULL en BD
+            'phone'      => $data['phone'] ?? null,
+            'dni'        => $data['dni']   ?? null,
         ]);
 
         Auth::login($user);
