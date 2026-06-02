@@ -56,6 +56,9 @@ class CheckoutService
                 ]
             );
 
+            $base       = $this->cart->total(); // ya incluye subtotal + vat
+            $gestionFee = Order::calcGestionFee($base);
+
             $order = Order::create([
                 'reference'        => Order::nextReference(),
                 'customer_id'      => $customer->id,
@@ -65,7 +68,8 @@ class CheckoutService
                 'subtotal'         => $this->cart->subtotal(),
                 'vat'              => $this->cart->vat(),
                 'shipping_cost'    => 0,
-                'total'            => $this->cart->total(),
+                'gestion_fee'      => $gestionFee,
+                'total'            => round($base + $gestionFee, 2),
                 'currency'         => 'EUR',
                 'payment_gateway'  => 'stripe',     // pre-marcado, se confirma en webhook
                 'payment_intent_id'=> null,         // lo escribe StripePaymentService

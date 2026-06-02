@@ -107,20 +107,31 @@
                     </li>
                 @endforeach
             </ul>
+            @php
+                $cartTotal  = (float) $this->total;            // base (sub + vat) sin gestion
+                $gestionFee = \App\Models\Order::calcGestionFee($cartTotal);
+                $totalConGestion = round($cartTotal + $gestionFee, 2);
+            @endphp
             <div class="border-t-2 border-algeciras-black/20 pt-3 space-y-1 text-sm text-algeciras-black/85">
                 <div class="flex justify-between"><span>Subtotal</span><span>{{ number_format($this->subtotal, 2, ',', '.') }}€</span></div>
                 <div class="flex justify-between text-algeciras-gray"><span>IVA incluido</span><span>{{ number_format($this->vat, 2, ',', '.') }}€</span></div>
+                @if ($gestionFee > 0)
+                    <div class="flex justify-between">
+                        <span class="flex items-center gap-1">Gastos de gestión <span class="text-xs text-algeciras-gray">(5%)</span></span>
+                        <span>{{ number_format($gestionFee, 2, ',', '.') }}€</span>
+                    </div>
+                @endif
             </div>
             <div class="border-t-2 border-algeciras-black pt-3 mt-3 mb-4 flex justify-between items-baseline">
                 <span class="font-display text-xl uppercase">Total</span>
-                <span class="font-display text-3xl text-algeciras-red">{{ number_format($this->total, 2, ',', '.') }}€</span>
+                <span class="font-display text-3xl text-algeciras-red">{{ number_format($totalConGestion, 2, ',', '.') }}€</span>
             </div>
 
             @if ($clientSecret)
                 {{-- Botón "Pagar" gestionado por Stripe.js (no Livewire) --}}
                 <button type="button" id="pay-now-btn"
                         class="w-full px-6 py-4 bg-algeciras-red hover:bg-algeciras-red-dark text-white font-display tracking-widest uppercase shadow-brutal hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition disabled:opacity-50">
-                    <span id="pay-now-label">💳 Pagar {{ number_format($this->total, 2, ',', '.') }}€</span>
+                    <span id="pay-now-label">💳 Pagar {{ number_format($totalConGestion, 2, ',', '.') }}€</span>
                     <span id="pay-now-spinner" class="hidden">Procesando…</span>
                 </button>
             @else

@@ -89,7 +89,11 @@ class CheckoutController extends Controller
                 ];
             }
 
-            // 3) Order pending
+            // 3) Order pending — total incluye gastos de gestión (5%)
+            $base       = round($subtotal + $vat, 2);
+            $gestionFee = Order::calcGestionFee($base);
+            $totalFinal = round($base + $gestionFee, 2);
+
             $order = Order::create([
                 'reference'        => Order::nextReference(),
                 'customer_id'      => $customer->id,
@@ -99,7 +103,8 @@ class CheckoutController extends Controller
                 'subtotal'         => round($subtotal, 2),
                 'vat'              => round($vat, 2),
                 'shipping_cost'    => 0,
-                'total'            => round($subtotal + $vat, 2),
+                'gestion_fee'      => $gestionFee,
+                'total'            => $totalFinal,
                 'currency'         => 'EUR',
                 'payment_gateway'  => 'stripe',
                 'payment_intent_id'=> null,
@@ -162,31 +167,42 @@ class CheckoutController extends Controller
             'type'       => ['nullable', Rule::in(['abono','entrada','merch'])],
         ]);
 
-        $precio = (float) $data['precio'];
+        // El parámetro `precio` es el PRECIO BASE del producto (lo que verá
+        // el cliente en la pantalla del plano del estadio). El total final
+        // que se cobra incluye un 5% de gastos de gestión (igual que
+        // Ticketmaster / Compralaentrada / ServiCaixa).
+        $precioBase   = (float) $data['precio'];
+        $subtotal     = round($precioBase / 1.21, 2);
+        $vat          = round($precioBase - $subtotal, 2);
+        $gestionFee   = Order::calcGestionFee($precioBase);
+        $totalFinal   = round($precioBase + $gestionFee, 2);
 
         // Crear Order pending mínima sin OrderItem (la creamos como ad-hoc).
         // Cuando exista Product->id para el asiento (mapping seat→product),
         // este endpoint lo enlazará. De momento dejamos la order con un
         // OrderItem "abono ad-hoc" para que el total cuadre.
-        $order = DB::transaction(function () use ($precio, $data) {
+        $order = DB::transaction(function () use ($precioBase, $subtotal, $vat, $gestionFee, $totalFinal, $data) {
             $order = Order::create([
                 'reference'        => Order::nextReference(),
                 'guest_email'      => 'app@algecirascf.es', // TODO: usar email del usuario auth si llega Bearer
                 'status'           => 'pending',
                 'channel'          => 'web', // schema enum no incluye 'app'; usamos web (es lo más cercano)
-                'subtotal'         => round($precio / 1.21, 2),
-                'vat'              => round($precio - ($precio / 1.21), 2),
+                'subtotal'         => $subtotal,
+                'vat'              => $vat,
                 'shipping_cost'    => 0,
-                'total'            => $precio,
+                'gestion_fee'      => $gestionFee,
+                'total'            => $totalFinal,
                 'currency'         => 'EUR',
                 'payment_gateway'  => 'stripe',
                 'payment_intent_id'=> null,
                 'admin_notes'      => sprintf(
-                    'App mobile: type=%s sectorId=%s asientoId=%s dni=%s',
+                    'App mobile: type=%s sectorId=%s asientoId=%s dni=%s | precio_base=%.2f gestion_5pct=%.2f',
                     $data['type']  ?? 'abono',
                     $data['sectorId']  ?? '?',
                     $data['asientoId'] ?? '?',
                     $data['dni']  ?? '-',
+                    $precioBase,
+                    $gestionFee,
                 ),
             ]);
 
@@ -201,11 +217,11 @@ class CheckoutController extends Controller
                 ),
                 'sku'           => 'APP-' . ($data['asientoId'] ?? 'X'),
                 'qty'           => 1,
-                'unit_price'    => $precio,
+                'unit_price'    => $precioBase,
                 'vat_rate'      => 21,
-                'subtotal'      => round($precio / 1.21, 2),
-                'vat_amount'    => round($precio - ($precio / 1.21), 2),
-                'total'         => $precio,
+                'subtotal'      => $subtotal,
+                'vat_amount'    => $vat,
+                'total'         => $precioBase,  // OrderItem.total = precio base sin gestion
             ]);
 
             return $order;

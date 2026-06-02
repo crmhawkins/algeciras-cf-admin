@@ -24,7 +24,7 @@
             {{-- Resumen del pedido --}}
             <section class="bg-white border-2 border-algeciras-black/10 p-5 mb-4">
                 <h2 class="font-display text-xl mb-3">Tu pedido</h2>
-                <ul class="space-y-2 mb-4 text-sm">
+                <ul class="space-y-2 mb-3 text-sm">
                     @foreach ($order->items as $it)
                         <li class="flex justify-between gap-2">
                             <span>{{ $it->qty }} × {{ $it->name }}</span>
@@ -32,7 +32,29 @@
                         </li>
                     @endforeach
                 </ul>
-                <div class="border-t-2 border-algeciras-black/20 pt-3 flex justify-between items-baseline">
+
+                @php
+                    $itemsTotal  = $order->items->sum('total');
+                    $gestionFee  = (float) ($order->gestion_fee ?? 0);
+                @endphp
+
+                <div class="border-t border-algeciras-black/10 pt-3 space-y-1 text-sm">
+                    <div class="flex justify-between text-algeciras-black/75">
+                        <span>Subtotal entradas/abono</span>
+                        <span class="font-display whitespace-nowrap">{{ number_format($itemsTotal, 2, ',', '.') }}€</span>
+                    </div>
+                    @if ($gestionFee > 0)
+                        <div class="flex justify-between text-algeciras-black/75">
+                            <span class="flex items-center gap-1">
+                                Gastos de gestión
+                                <span class="text-xs text-algeciras-gray">(5%)</span>
+                            </span>
+                            <span class="font-display whitespace-nowrap">{{ number_format($gestionFee, 2, ',', '.') }}€</span>
+                        </div>
+                    @endif
+                </div>
+
+                <div class="border-t-2 border-algeciras-black/20 pt-3 mt-3 flex justify-between items-baseline">
                     <span class="font-display text-base uppercase">Total</span>
                     <span class="font-display text-2xl text-algeciras-red">{{ number_format($order->total, 2, ',', '.') }}€</span>
                 </div>

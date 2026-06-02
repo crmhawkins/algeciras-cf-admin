@@ -118,6 +118,8 @@ class AbonadosController extends Controller
                 'asiento'           => $asiento,
                 'season_name'       => $ticket->season->name ?? null,
                 'precio_renovacion' => $precioRenovacion,
+                'gastos_gestion'    => Order::calcGestionFee((float) $precioRenovacion),
+                'total_renovacion'  => round((float) $precioRenovacion + Order::calcGestionFee((float) $precioRenovacion), 2),
                 'renovacion_season' => $currentSeason?->name,
                 'renovacion_product_id' => $this->resolveRenovacionProductId($ticket, $currentSeason),
             ],
@@ -194,7 +196,9 @@ class AbonadosController extends Controller
                 $itemsResolved[] = compact('product', 'qty', 'unit', 'itemSub', 'itemVat');
             }
 
-            $total = round($subtotal + $vat, 2);
+            $base       = round($subtotal + $vat, 2);
+            $gestionFee = Order::calcGestionFee($base);
+            $total      = round($base + $gestionFee, 2);
 
             $order = Order::create([
                 'reference'        => Order::nextReference(),
@@ -205,6 +209,7 @@ class AbonadosController extends Controller
                 'subtotal'         => round($subtotal, 2),
                 'vat'              => round($vat, 2),
                 'shipping_cost'    => 0,
+                'gestion_fee'      => $gestionFee,
                 'total'            => $total,
                 'currency'         => 'EUR',
                 'payment_gateway'  => 'stripe',

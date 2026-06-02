@@ -6,21 +6,19 @@ use App\Models\Attendance;
 use App\Models\FootballMatch;
 use App\Models\Sector;
 use App\Models\Zone;
-use Filament\Widgets\Concerns\CanPoll;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
 
 class MatchAttendanceStatsWidget extends Widget
 {
-    use CanPoll;
-
     protected string $view = 'filament.widgets.match-attendance-stats';
 
     protected int|string|array $columnSpan = 'full';
 
     protected static ?int $sort = -10;
 
-    protected ?string $pollingInterval = '30s';
+    // El polling lo hace la propia blade vista con wire:poll.30s; no uso el
+    // trait CanPoll porque en Filament 5 colisiona con la propiedad estática.
 
     /**
      * Datos para la vista.
