@@ -23,10 +23,23 @@
 <section class="bg-algeciras-cream py-16 lg:py-24">
     <div class="container mx-auto px-4 lg:px-8 grid lg:grid-cols-2 gap-12 lg:gap-20 items-start">
 
-        {{-- COLUMNA IZQUIERDA: Formulario login --}}
-        <div class="bg-white border-2 border-algeciras-black/10 shadow-brutal p-8 lg:p-10" data-fx="reveal">
-            <p class="font-mono text-algeciras-red text-xs tracking-[0.4em] uppercase mb-2">Iniciar sesión</p>
-            <h2 class="font-display text-4xl lg:text-5xl mb-8">Accede a tu cuenta</h2>
+        {{-- COLUMNA IZQUIERDA: Tabs Login / Registro --}}
+        <div x-data="{ tab: '{{ session('register_attempted') || ($errors->any() && old('name')) ? 'register' : 'login' }}' }"
+             class="bg-white border-2 border-algeciras-black/10 shadow-brutal p-8 lg:p-10" data-fx="reveal">
+
+            {{-- Tabs --}}
+            <div class="flex gap-0 mb-8 border-b-2 border-algeciras-black/10">
+                <button type="button" @click="tab = 'login'"
+                        :class="tab === 'login' ? 'border-algeciras-red text-algeciras-black' : 'border-transparent text-algeciras-gray hover:text-algeciras-black'"
+                        class="flex-1 py-3 font-display tracking-widest uppercase text-sm border-b-4 transition">
+                    Iniciar sesión
+                </button>
+                <button type="button" @click="tab = 'register'"
+                        :class="tab === 'register' ? 'border-algeciras-red text-algeciras-black' : 'border-transparent text-algeciras-gray hover:text-algeciras-black'"
+                        class="flex-1 py-3 font-display tracking-widest uppercase text-sm border-b-4 transition">
+                    Crear cuenta
+                </button>
+            </div>
 
             @if ($errors->any())
                 <div class="mb-4 p-4 bg-algeciras-red/10 border-l-4 border-algeciras-red">
@@ -35,7 +48,9 @@
                     @endforeach
                 </div>
             @endif
-            <form action="{{ route('area-personal.login') }}" method="POST" class="space-y-5">
+
+            {{-- LOGIN FORM --}}
+            <form x-show="tab === 'login'" action="{{ route('area-personal.login') }}" method="POST" class="space-y-5">
                 @csrf
                 <div>
                     <label for="email" class="block font-display tracking-widest uppercase text-xs mb-2">Email</label>
@@ -62,13 +77,100 @@
                         class="w-full px-6 py-4 bg-algeciras-red hover:bg-algeciras-red-dark text-white font-display tracking-widest uppercase shadow-brutal hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition">
                     Entrar →
                 </button>
+
+                <p class="text-center text-sm text-algeciras-gray pt-2">
+                    ¿No tienes cuenta?
+                    <button type="button" @click="tab = 'register'" class="text-algeciras-red font-display tracking-wider uppercase text-xs ml-1 hover:underline">
+                        Crear cuenta gratis
+                    </button>
+                </p>
             </form>
 
-            <hr class="my-8 border-algeciras-black/10">
-            <p class="text-center text-sm text-algeciras-gray">
-                ¿Aún no eres socio?
-                <a href="{{ route('abonos') }}" class="text-algeciras-red font-display tracking-wider uppercase text-xs ml-1 hover:underline">Hazte abonado →</a>
-            </p>
+            {{-- REGISTER FORM (mismas campos que la app móvil) --}}
+            <form x-show="tab === 'register'" x-cloak action="{{ route('area-personal.register') }}" method="POST" class="space-y-4">
+                @csrf
+
+                <div class="grid sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block font-display tracking-widest uppercase text-xs mb-2">Nombre *</label>
+                        <input type="text" name="first_name" required value="{{ old('first_name') }}"
+                               autocomplete="given-name"
+                               class="w-full px-4 py-3 border-2 border-algeciras-black/10 focus:border-algeciras-red focus:outline-none transition font-mono"
+                               placeholder="Ivan">
+                    </div>
+                    <div>
+                        <label class="block font-display tracking-widest uppercase text-xs mb-2">Apellidos</label>
+                        <input type="text" name="last_name" value="{{ old('last_name') }}"
+                               autocomplete="family-name"
+                               class="w-full px-4 py-3 border-2 border-algeciras-black/10 focus:border-algeciras-red focus:outline-none transition font-mono"
+                               placeholder="García López">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-display tracking-widest uppercase text-xs mb-2">Email *</label>
+                    <input type="email" name="email" required value="{{ old('email') }}"
+                           autocomplete="email"
+                           class="w-full px-4 py-3 border-2 border-algeciras-black/10 focus:border-algeciras-red focus:outline-none transition font-mono"
+                           placeholder="tu@email.com">
+                </div>
+
+                <div class="grid sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block font-display tracking-widest uppercase text-xs mb-2">Teléfono</label>
+                        <div class="flex">
+                            <span class="px-3 py-3 border-2 border-r-0 border-algeciras-black/10 bg-algeciras-cream font-mono text-sm">🇪🇸 +34</span>
+                            <input type="tel" name="phone" value="{{ old('phone') }}"
+                                   autocomplete="tel-national"
+                                   class="flex-1 px-4 py-3 border-2 border-algeciras-black/10 focus:border-algeciras-red focus:outline-none transition font-mono"
+                                   placeholder="600 000 000">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block font-display tracking-widest uppercase text-xs mb-2">DNI / NIE</label>
+                        <input type="text" name="dni" value="{{ old('dni') }}"
+                               class="w-full px-4 py-3 border-2 border-algeciras-black/10 focus:border-algeciras-red focus:outline-none transition font-mono uppercase"
+                               placeholder="12345678X">
+                    </div>
+                </div>
+
+                <div class="grid sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block font-display tracking-widest uppercase text-xs mb-2">Contraseña *</label>
+                        <input type="password" name="password" required minlength="6"
+                               autocomplete="new-password"
+                               class="w-full px-4 py-3 border-2 border-algeciras-black/10 focus:border-algeciras-red focus:outline-none transition font-mono"
+                               placeholder="••••••••">
+                    </div>
+                    <div>
+                        <label class="block font-display tracking-widest uppercase text-xs mb-2">Confirmar *</label>
+                        <input type="password" name="password_confirmation" required minlength="6"
+                               autocomplete="new-password"
+                               class="w-full px-4 py-3 border-2 border-algeciras-black/10 focus:border-algeciras-red focus:outline-none transition font-mono"
+                               placeholder="••••••••">
+                    </div>
+                </div>
+
+                <label class="flex items-start gap-2 text-xs text-algeciras-gray cursor-pointer">
+                    <input type="checkbox" required class="mt-1 accent-algeciras-red">
+                    <span>
+                        Acepto la <a href="{{ route('privacidad') }}" target="_blank" class="text-algeciras-red hover:underline">Política de Privacidad</a>
+                        y los términos del club.
+                    </span>
+                </label>
+
+                <button type="submit"
+                        class="w-full px-6 py-4 bg-algeciras-red hover:bg-algeciras-red-dark text-white font-display tracking-widest uppercase shadow-brutal hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition">
+                    Crear cuenta →
+                </button>
+
+                <p class="text-center text-sm text-algeciras-gray pt-2">
+                    ¿Ya tienes cuenta?
+                    <button type="button" @click="tab = 'login'" class="text-algeciras-red font-display tracking-wider uppercase text-xs ml-1 hover:underline">
+                        Inicia sesión
+                    </button>
+                </p>
+            </form>
         </div>
 
         {{-- COLUMNA DERECHA: Qué podrás hacer --}}
