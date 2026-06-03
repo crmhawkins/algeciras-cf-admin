@@ -233,7 +233,7 @@ class CobroManual extends Page implements HasForms
                     'reference'        => $reference,
                     'customer_id'      => $customer->id,
                     'status'           => 'paid',
-                    'channel'          => 'admin_cobro_manual',
+                    'channel'          => 'admin',
                     'subtotal'         => $subtotal,
                     'vat'              => $vat,
                     'shipping_cost'    => 0,
