@@ -11,9 +11,12 @@ class Customer extends Model
 
     protected $fillable = [
         'user_id','first_name','last_name','email','phone','dni','birth_date',
+        'gender',
         'address','city','province','postal_code','country',
         'is_socio','socio_number','socio_since','language',
         'newsletter_optin','whatsapp_optin','notes',
+        // Mapping legacy (migración BD del club anterior)
+        'legacy_user_id','legacy_socio_id',
     ];
 
     protected $casts = [

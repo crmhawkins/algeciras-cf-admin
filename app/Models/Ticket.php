@@ -14,6 +14,8 @@ class Ticket extends Model
         'order_item_id','customer_id','product_id','match_id','season_id','zone_id',
         'uuid','qr_token','qr_image_path','status','holder_name','holder_dni',
         'valid_from','valid_until','used_at','used_by_admin_id','used_gate',
+        // Mapping legacy (migración BD del club anterior)
+        'legacy_id','price_paid','legacy_codigo_acceso',
     ];
 
     protected $casts = [

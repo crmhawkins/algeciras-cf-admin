@@ -24,6 +24,8 @@ class Product extends Model
         'has_variants','ship_required','stock','weight_kg',
         'match_id','season_id','zone_id','capacity','sold',
         'sale_starts_at','sale_ends_at','socios_only',
+        // Mapping legacy
+        'legacy_id',
     ];
 
     protected $casts = [
