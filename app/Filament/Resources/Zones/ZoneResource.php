@@ -13,12 +13,23 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class ZoneResource extends Resource
 {
     protected static ?string $model = Zone::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedMapPin;
+
+    protected static string|UnitEnum|null $navigationGroup = 'Contenido de la web';
+
+    protected static ?int $navigationSort = 70;
+
+    protected static ?string $navigationLabel = 'Zonas del estadio';
+
+    protected static ?string $modelLabel = 'Zona';
+
+    protected static ?string $pluralModelLabel = 'Zonas';
 
     public static function form(Schema $schema): Schema
     {

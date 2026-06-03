@@ -20,11 +20,11 @@ class AttendanceResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedQrCode;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Estadio';
+    protected static string|UnitEnum|null $navigationGroup = 'Atención al usuario';
 
-    protected static ?int $navigationSort = 50;
+    protected static ?int $navigationSort = 140;
 
-    protected static ?string $navigationLabel = 'Accesos escaneados';
+    protected static ?string $navigationLabel = 'Accesos al estadio';
 
     protected static ?string $modelLabel = 'Acceso';
 

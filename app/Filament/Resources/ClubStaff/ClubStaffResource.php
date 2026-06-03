@@ -13,12 +13,23 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class ClubStaffResource extends Resource
 {
     protected static ?string $model = ClubStaff::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedIdentification;
+
+    protected static string|UnitEnum|null $navigationGroup = 'Contenido de la web';
+
+    protected static ?int $navigationSort = 40;
+
+    protected static ?string $navigationLabel = 'Cuerpo técnico';
+
+    protected static ?string $modelLabel = 'Miembro del staff';
+
+    protected static ?string $pluralModelLabel = 'Cuerpo técnico';
 
     public static function form(Schema $schema): Schema
     {

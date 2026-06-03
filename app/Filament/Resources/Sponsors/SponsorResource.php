@@ -13,12 +13,23 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class SponsorResource extends Resource
 {
     protected static ?string $model = Sponsor::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedMegaphone;
+
+    protected static string|UnitEnum|null $navigationGroup = 'Contenido de la web';
+
+    protected static ?int $navigationSort = 50;
+
+    protected static ?string $navigationLabel = 'Patrocinadores';
+
+    protected static ?string $modelLabel = 'Patrocinador';
+
+    protected static ?string $pluralModelLabel = 'Patrocinadores';
 
     public static function form(Schema $schema): Schema
     {

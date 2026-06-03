@@ -19,9 +19,11 @@ class CouponResource extends Resource
 {
     protected static ?string $model = Coupon::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTicket;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedReceiptPercent;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Tienda';
+    protected static string|UnitEnum|null $navigationGroup = 'Atención al usuario';
+
+    protected static ?int $navigationSort = 130;
 
     protected static ?string $navigationLabel = 'Cupones';
 

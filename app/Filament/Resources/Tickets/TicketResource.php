@@ -15,6 +15,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class TicketResource extends Resource
 {
@@ -22,7 +23,11 @@ class TicketResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTicket;
 
-    protected static ?string $navigationLabel = 'Tickets';
+    protected static string|UnitEnum|null $navigationGroup = 'Atención al usuario';
+
+    protected static ?int $navigationSort = 120;
+
+    protected static ?string $navigationLabel = 'Tickets emitidos';
 
     protected static ?string $modelLabel = 'Ticket';
 
