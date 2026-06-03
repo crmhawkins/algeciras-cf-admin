@@ -22,14 +22,27 @@
 <body class="min-h-screen flex flex-col">
 
     {{-- ========== HEADER ========== --}}
+    {{-- Cuando la vista se embebe en la app móvil (?native=1), ocultamos
+         el header/footer porque la app ya pinta su propio chrome. La
+         WebPageScreen RN apunta a /club, /contacto y /privacidad con
+         ?native=1 para mostrar sólo el contenido. --}}
+    @unless(request()->boolean('native'))
     <header x-data="{ open: false }" class="sticky top-0 z-50 bg-algeciras-black text-white border-b-2 border-algeciras-red">
         <div class="container mx-auto px-4 lg:px-8 h-16 flex items-center justify-between">
             <a href="{{ route('home') }}" class="flex items-center gap-3 group">
-                <img src="{{ asset('img/club/escudo.png') }}" alt="Escudo Algeciras CF" class="h-12 w-auto transition group-hover:scale-110">
-                <div class="leading-none hidden sm:block">
-                    <div class="font-display font-black text-xl tracking-wider uppercase">Algeciras</div>
-                    <div class="font-display text-[10px] text-algeciras-red tracking-[0.3em] uppercase">Club de Fútbol</div>
-                </div>
+                <img src="{{ asset('img/club/escudo.png') }}" alt="Escudo Algeciras CF"
+                     class="h-12 w-auto transition group-hover:scale-110">
+
+                {{-- Logotipo "ALGECIRAS / CLUB DE FÚTBOL" vectorizado oficial
+                     entregado por el cliente. Versión BLANCA para que case
+                     con el resto de texto del header (menú nav). Centrado
+                     verticalmente respecto al escudo. --}}
+                <img src="{{ asset('img/club/algeciras_cf_texto_blanco.svg') }}"
+                     alt="Algeciras Club de Fútbol"
+                     style="height:30px;width:auto;display:block;"
+                     class="hidden sm:block self-center transition group-hover:scale-[1.03]">
+                {{-- En móvil pequeño solo el escudo (sin texto, para no
+                     comerse el header). --}}
             </a>
 
             @php
@@ -40,7 +53,7 @@
                     ['label' => 'Actualidad', 'route' => 'actualidad'],
                     ['label' => 'FanZone',    'route' => 'fanzone'],
                     ['label' => 'Tienda',     'route' => 'tienda'],
-                    ['label' => 'Entradas',   'route' => 'tienda', 'params' => ['type' => 'entrada']],
+                    ['label' => 'Entradas',   'route' => 'entradas'],
                     ['label' => 'Zona Socio', 'route' => 'zona-socio'],
                 ];
             @endphp
@@ -92,6 +105,7 @@
             </nav>
         </div>
     </header>
+    @endunless
 
     {{-- ========== CONTENT ========== --}}
     <main class="flex-1">
@@ -99,6 +113,7 @@
     </main>
 
     {{-- ========== FOOTER ========== --}}
+    @unless(request()->boolean('native'))
     <footer class="bg-algeciras-black text-algeciras-bone mt-24">
         <div class="container mx-auto px-4 lg:px-8 py-16 grid md:grid-cols-4 gap-10">
             <div>
@@ -127,12 +142,20 @@
                 </ul>
             </div>
             <div>
+                {{-- Tienda = SOLO merchandising. Los enlaces a abonos
+                     y entradas viven en su propia columna "Compra". --}}
                 <h4 class="font-display text-algeciras-red text-lg tracking-wider mb-3">Tienda</h4>
                 <ul class="space-y-2 text-sm text-algeciras-bone/80">
-                    <li><a href="#" class="hover:text-white">Equipación 26-27</a></li>
-                    <li><a href="#" class="hover:text-white">Lifestyle</a></li>
-                    <li><a href="#" class="hover:text-white">Abonos</a></li>
-                    <li><a href="#" class="hover:text-white">Entradas</a></li>
+                    <li><a href="{{ route('tienda') }}" class="hover:text-white">Equipación 26-27</a></li>
+                    <li><a href="{{ route('tienda') }}" class="hover:text-white">Lifestyle</a></li>
+                    <li><a href="{{ route('tienda') }}" class="hover:text-white">Accesorios</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4 class="font-display text-algeciras-red text-lg tracking-wider mb-3">Compra</h4>
+                <ul class="space-y-2 text-sm text-algeciras-bone/80">
+                    <li><a href="{{ route('abonos') }}" class="hover:text-white">Abonos 2026-27</a></li>
+                    <li><a href="{{ route('entradas') }}" class="hover:text-white">Entradas partido</a></li>
                 </ul>
             </div>
             <div>
@@ -151,6 +174,7 @@
             </div>
         </div>
     </footer>
+    @endunless
 
     @livewireScripts
     @stack('scripts')
