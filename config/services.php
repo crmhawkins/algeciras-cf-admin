@@ -14,6 +14,14 @@ return [
     |
     */
 
+    /*
+    | Pasarela de pago activa: 'redsys' (Banco Sabadell) o 'stripe'.
+    | Por defecto Redsys, que es la que el club tiene contratada en producción.
+    */
+    'payment' => [
+        'gateway' => env('PAYMENT_GATEWAY', 'redsys'),
+    ],
+
     'postmark' => [
         'token' => env('POSTMARK_TOKEN'),
     ],

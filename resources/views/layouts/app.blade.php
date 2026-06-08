@@ -169,8 +169,13 @@
         </div>
         <div class="border-t border-white/10 py-4">
             <div class="container mx-auto px-4 lg:px-8 flex flex-col md:flex-row justify-between gap-2 text-xs text-algeciras-bone/50">
-                <span>© {{ date('Y') }} Algeciras Club de Fútbol. Todos los derechos reservados.</span>
-                <span>Temporada {{ env('CLUB_SEASON') }} · Primera Federación</span>
+                <span>© {{ date('Y') }} {{ config('club.razon_social') }} · CIF {{ config('club.cif') }} · Todos los derechos reservados.</span>
+                <span class="flex gap-3">
+                    <a href="{{ route('aviso-legal') }}" class="hover:text-white">Aviso legal</a>
+                    <a href="{{ route('condiciones-venta') }}" class="hover:text-white">Condiciones de venta</a>
+                    <a href="{{ route('politica-entrega') }}" class="hover:text-white">Entrega</a>
+                    <a href="{{ route('privacidad') }}" class="hover:text-white">Privacidad</a>
+                </span>
             </div>
         </div>
     </footer>

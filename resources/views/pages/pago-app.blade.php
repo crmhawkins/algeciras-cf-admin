@@ -12,7 +12,12 @@
         {{-- Mini header app: solo escudo + total --}}
         <header class="bg-algeciras-red text-white p-5">
             <div class="flex items-center gap-3">
-                <img src="{{ asset('algeciras-shield.png') }}" alt="" class="w-10 h-10">
+                {{-- Antes: <img src="algeciras-shield.png"> → 404, el asset no existe.
+                     El escudo real está en /img/club/escudo-oficial.svg. --}}
+                <img src="{{ asset('img/club/escudo-oficial.svg') }}"
+                     alt="Algeciras CF"
+                     class="w-10 h-10"
+                     onerror="this.style.display='none'">
                 <div>
                     <h1 class="font-display text-lg leading-none">Pago seguro</h1>
                     <p class="text-xs opacity-85 mt-1">Pedido {{ $order->reference }}</p>
@@ -87,17 +92,126 @@
                 </div>
             </section>
 
+            @guest
+                {{-- Visitante sin cuenta — antes de mostrarle la pasarela,
+                     pedimos los datos legalmente obligatorios. Al enviarlos
+                     creamos su cuenta automáticamente, vinculamos la orden
+                     y le redirigimos a esta misma URL (ya autenticado),
+                     que ya verá Stripe Elements o el botón gratis. --}}
+                <section class="bg-white border-2 border-algeciras-black/10 p-5 mb-4">
+                    <h2 class="font-display text-xl mb-1">Tus datos</h2>
+                    <p class="text-xs text-algeciras-gray mb-4">
+                        Necesarios para emitir tu abono y entrada al estadio.
+                        Te crearemos cuenta y verás tu compra en "Mi cuenta".
+                    </p>
+
+                    @if ($errors->any())
+                        <div class="bg-algeciras-red text-white p-3 mb-4 text-sm">
+                            {{ $errors->first() }}
+                        </div>
+                    @endif
+
+                    <form method="POST" action="{{ route('pago-app.guest-checkout', $order->reference) }}" class="space-y-3">
+                        @csrf
+                        @php
+                            $cls = 'w-full px-3 py-2 border-2 border-algeciras-black/10 focus:border-algeciras-red focus:outline-none font-mono text-sm';
+                        @endphp
+
+                        <div class="grid sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-mono uppercase tracking-wider mb-1">Nombre *</label>
+                                <input type="text" name="first_name" required value="{{ old('first_name') }}" class="{{ $cls }}">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-mono uppercase tracking-wider mb-1">Apellidos *</label>
+                                <input type="text" name="last_name" required value="{{ old('last_name') }}" class="{{ $cls }}">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-mono uppercase tracking-wider mb-1">Email *</label>
+                            <input type="email" name="email" required value="{{ old('email') }}" class="{{ $cls }}">
+                        </div>
+
+                        <div class="grid sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-mono uppercase tracking-wider mb-1">Teléfono *</label>
+                                <input type="tel" name="phone" required value="{{ old('phone') }}" placeholder="600 000 000" class="{{ $cls }}">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-mono uppercase tracking-wider mb-1">DNI/NIE *</label>
+                                <input type="text" name="dni" required value="{{ old('dni') }}" placeholder="12345678X" class="{{ $cls }} uppercase">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-mono uppercase tracking-wider mb-1">Fecha de nacimiento *</label>
+                            <input type="date" name="birth_date" required value="{{ old('birth_date') }}"
+                                   max="{{ now()->subYears(14)->format('Y-m-d') }}"
+                                   min="{{ now()->subYears(110)->format('Y-m-d') }}"
+                                   class="{{ $cls }}">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-mono uppercase tracking-wider mb-1">Dirección *</label>
+                            <input type="text" name="address" required value="{{ old('address') }}" placeholder="Calle Real 123, 4ºB" class="{{ $cls }}">
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-xs font-mono uppercase tracking-wider mb-1">CP *</label>
+                                <input type="text" name="postal_code" required value="{{ old('postal_code') }}" placeholder="11201" pattern="[0-9]{5}" class="{{ $cls }}">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-mono uppercase tracking-wider mb-1">Ciudad *</label>
+                                <input type="text" name="city" required value="{{ old('city', 'Algeciras') }}" class="{{ $cls }}">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-mono uppercase tracking-wider mb-1">Provincia</label>
+                                <input type="text" name="province" value="{{ old('province', 'Cádiz') }}" class="{{ $cls }}">
+                            </div>
+                        </div>
+
+                        <div class="border-t border-algeciras-black/10 pt-3 mt-3">
+                            <p class="text-xs text-algeciras-gray mb-3">Te creamos cuenta con esta contraseña para que veas tu abono / entrada en "Mi cuenta":</p>
+                            <div class="grid sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-mono uppercase tracking-wider mb-1">Contraseña *</label>
+                                    <input type="password" name="password" required minlength="6" class="{{ $cls }}">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-mono uppercase tracking-wider mb-1">Confirmar *</label>
+                                    <input type="password" name="password_confirmation" required minlength="6" class="{{ $cls }}">
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit"
+                                class="w-full px-6 py-4 bg-algeciras-red hover:bg-algeciras-red-dark text-white font-display tracking-widest uppercase shadow-brutal hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition mt-2">
+                            Continuar al pago →
+                        </button>
+                    </form>
+
+                    <p class="text-xs text-center text-algeciras-gray mt-4">
+                        ¿Ya tienes cuenta?
+                        <a href="{{ route('area-personal') }}?next={{ urlencode(url()->current()) }}" class="text-algeciras-red hover:underline">Inicia sesión</a>
+                    </p>
+                </section>
+            @else
             @if (! empty($freeOrder))
                 {{-- Total < 0.50€ (típicamente cupón 100%). No tiene sentido
-                     cobrar a Stripe — confirmamos como pagado simulado. --}}
-                <section class="bg-green-50 border-l-4 border-green-600 p-4 mb-4 text-sm">
-                    <p class="font-bold mb-1 text-green-900">¡Pedido gratuito!</p>
-                    <p class="text-green-800">Tu pedido queda confirmado sin cobro. Pulsa el botón para finalizar.</p>
+                     cobrar a Stripe — confirmamos como pagado simulado.
+                     Antes usábamos bg-green-600/50 que Tailwind v4 NO incluía
+                     en el bundle (clases no usadas en otro sitio del proyecto)
+                     → el botón salía sin color. Cambiado a paleta brand. --}}
+                <section class="bg-algeciras-cream border-l-4 border-algeciras-red p-4 mb-4 text-sm">
+                    <p class="font-display tracking-widest uppercase mb-1">¡Pedido gratuito!</p>
+                    <p>Tu pedido queda confirmado sin cobro. Pulsa el botón para finalizar.</p>
                 </section>
                 <form method="POST" action="{{ route('pago-app.simulado', $order->reference) }}">
                     @csrf
                     <button type="submit"
-                            class="w-full px-6 py-4 bg-green-600 text-white font-display tracking-widest uppercase shadow-brutal">
+                            class="w-full px-6 py-4 bg-algeciras-red hover:bg-algeciras-red-dark text-white font-display tracking-widest uppercase shadow-brutal hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition">
                         ✓ Confirmar pedido (gratis)
                     </button>
                 </form>
@@ -114,8 +228,59 @@
                         Confirmar reserva (sin cobro)
                     </button>
                 </form>
+            @elseif (($gateway ?? 'redsys') === 'redsys')
+                {{-- === REDSYS TPV virtual (Banco Sabadell) ===
+                     El usuario debe aceptar las condiciones (checkbox) antes
+                     de que se le redirija a la pasarela. Requisito Redsys +
+                     Ley 34/2002 LSSI-CE. --}}
+                <section class="bg-white border-2 border-algeciras-black/10 p-5 mb-4">
+                    <h2 class="font-display text-xl mb-3">Método de pago</h2>
+                    <div class="flex items-start gap-3 p-4 rounded-lg bg-gray-50">
+                        <div class="text-3xl">💳</div>
+                        <div class="text-sm leading-relaxed">
+                            <strong>Tarjeta de crédito o débito</strong> (Visa, Mastercard, Maestro).<br>
+                            Procesado por {{ config('club.banco') }} mediante <strong>Redsys</strong>
+                            con autenticación segura 3D Secure.<br>
+                            <em class="text-xs text-gray-600">No almacenamos los datos de tu tarjeta.</em>
+                        </div>
+                    </div>
+
+                    <label class="flex items-start gap-2 mt-5 text-sm cursor-pointer">
+                        <input type="checkbox" id="aceptar-condiciones" class="mt-0.5 w-5 h-5 accent-algeciras-red" required>
+                        <span>
+                            He leído y acepto las
+                            <a href="{{ route('condiciones-venta') }}" target="_blank" class="text-algeciras-red underline">
+                                condiciones de venta, cancelación y devolución</a>,
+                            la <a href="{{ route('politica-entrega') }}" target="_blank" class="text-algeciras-red underline">
+                                política de entrega</a> y el
+                            <a href="{{ route('aviso-legal') }}" target="_blank" class="text-algeciras-red underline">aviso legal</a>.
+                        </span>
+                    </label>
+                </section>
+
+                <a href="{{ route('redsys.start', $order->reference) }}"
+                   id="pay-now-btn"
+                   onclick="if(!document.getElementById('aceptar-condiciones').checked){event.preventDefault();alert('Debes aceptar las condiciones de venta para continuar.');return false;}"
+                   class="block text-center w-full px-6 py-4 bg-algeciras-red hover:bg-algeciras-red-dark text-white font-display tracking-widest uppercase shadow-brutal opacity-50 pointer-events-none transition"
+                   data-disabled="true">
+                    💳 Pagar con tarjeta · {{ number_format($order->total, 2, ',', '.') }}€
+                </a>
+
+                <script>
+                    document.getElementById('aceptar-condiciones').addEventListener('change', function (e) {
+                        const btn = document.getElementById('pay-now-btn');
+                        if (e.target.checked) {
+                            btn.classList.remove('opacity-50', 'pointer-events-none');
+                            btn.removeAttribute('data-disabled');
+                        } else {
+                            btn.classList.add('opacity-50', 'pointer-events-none');
+                            btn.setAttribute('data-disabled', 'true');
+                        }
+                    });
+                </script>
+
             @else
-                {{-- Stripe Elements montado a través del PI creado al cargar la página --}}
+                {{-- Stripe Elements (legacy, sólo activo si PAYMENT_GATEWAY=stripe) --}}
                 <section class="bg-white border-2 border-algeciras-black/10 p-5 mb-4">
                     <h2 class="font-display text-xl mb-3">Método de pago</h2>
                     <div id="payment-element" class="min-h-[160px]"></div>
@@ -167,9 +332,10 @@
                     })();
                 </script>
             @endif
+            @endguest
 
             <p class="text-xs text-center text-algeciras-black/60 mt-6">
-                Tras el pago, vuelve a la app — tu abono aparecerá en "Mi cuenta → Abonos" y recibirás email con el QR.
+                Tras el pago, tu abono aparecerá en "Mi cuenta → Abonos" y recibirás email con el QR.
             </p>
         </main>
     </div>
