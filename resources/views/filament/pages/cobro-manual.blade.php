@@ -6,12 +6,19 @@
             zoneSlug: null,
             productZones: @js(\App\Models\Product::where('type','abono')->where('active',1)->with('zone:id,slug,name')->get()->mapWithKeys(fn($p)=>[$p->id=>$p->zone?->slug])),
             openEstadioModal() {
-                // Detectar product_id del componente Livewire actual
+                // Detectar product_id del FORM Filament (iterar wire:ids y filtrar
+                // por data.first_name como huella, igual que el listener postMessage).
                 let pid = null;
                 try {
-                    const root = document.querySelector('[wire\\:id]');
-                    const cmp = root ? Livewire.find(root.getAttribute('wire:id')) : null;
-                    pid = cmp?.get?.('data.product_id') || null;
+                    const roots = [...document.querySelectorAll('[wire\\:id]')];
+                    for (const r of roots) {
+                        const c = Livewire.find(r.getAttribute('wire:id'));
+                        const d = c?.get?.('data');
+                        if (d && 'first_name' in d && 'product_id' in d) {
+                            pid = d.product_id || null;
+                            break;
+                        }
+                    }
                 } catch (e) {}
                 this.zoneSlug = pid ? this.productZones[pid] : null;
                 this.iframeSrc = '{{ url('/estadio?embed=admin') }}' + (this.zoneSlug ? '&zone=' + encodeURIComponent(this.zoneSlug) : '');

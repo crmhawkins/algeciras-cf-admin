@@ -55,6 +55,137 @@
 
 @section('content')
 
+@if (! empty($purchase))
+    {{-- Banner sticky cuando el visitante viene del flujo de compra
+         (de /abonos o /entradas). Le recordamos qué está comprando y
+         le ponemos botón Cancelar. --}}
+    <div class="sticky top-16 z-40 bg-algeciras-red text-white shadow-brutal">
+        <div class="container mx-auto px-4 lg:px-8 py-3 flex items-center justify-between gap-4 flex-wrap">
+            <div>
+                <p class="font-mono text-xs uppercase tracking-widest opacity-80">
+                    Eligiendo butaca para
+                </p>
+                <p class="font-display text-lg leading-tight">
+                    {{ $purchase['product']->getTranslation('name','es') }}
+                    @if ($purchase['match'])
+                        · vs {{ $purchase['match']->opponent }}
+                    @endif
+                </p>
+            </div>
+            <a href="{{ $purchase['type'] === 'abono' ? route('abonos') : route('entradas') }}"
+               class="font-mono uppercase tracking-widest text-xs border-b border-white hover:opacity-80">
+                ✕ Cancelar
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // Esta querystring se propaga a los links de sectores
+        // para que el plano y el detalle sepan qué se compra.
+        window.__PURCHASE_QS = '?product={{ urlencode($purchase['product']->slug) }}'
+            @if ($purchase['match'])
+                + '&match={{ $purchase['match']->id }}'
+            @endif
+        ;
+    </script>
+@endif
+
+@if (request()->query('embed') === 'admin')
+    {{-- Modo embebido en panel Filament (Renovación / Abono nuevo) — ocultamos
+         el chrome de la web pública (header, hero, listado lateral, footer)
+         y dejamos solo el SVG del plano del estadio a pantalla completa. --}}
+    <style>
+        body { background: #fff !important; }
+        /* Ocultar solo el chrome de la web — NO la section que contiene el SVG
+           del plano (que era el bug: se mostraba el modal con el iframe vacio).
+           OJO: no usar [data-fx] global — el #plano-wrapper tambien lo tiene
+           y se ocultaba el plano entero. */
+        header, footer, nav, .grano, .matchday-strip,
+        .hero, .hero-section,
+        .sticky, #cookie-banner,
+        .container.mx-auto h1,
+        .container.mx-auto h2:not(.embed-keep) {
+            display: none !important;
+        }
+        /* Forzar visibilidad de cualquier elemento con animacion GSAP
+           inicial (opacity:0 + transform pendiente de scroll) que no
+           se hubiera revelado a tiempo. */
+        [data-fx] { opacity: 1 !important; visibility: visible !important; transform: none !important; }
+        /* La section del plano: cambiar fondo a blanco y compactar padding
+           para aprovechar el espacio del modal Filament. */
+        section.relative.bg-algeciras-black,
+        section[class*="bg-algeciras-black"] {
+            background: #fff !important;
+            color: #111 !important;
+            padding: 0.5rem !important;
+        }
+        section.relative.bg-algeciras-black *,
+        section[class*="bg-algeciras-black"] * {
+            color: #111 !important;
+        }
+        main, .container, .max-w-7xl, .max-w-6xl, .max-w-5xl {
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0.5rem !important;
+        }
+        /* Maximizar el area del SVG dentro del modal */
+        svg { width: 100% !important; height: auto !important; max-height: 75vh !important; }
+    </style>
+    <script>
+        window.__PURCHASE_QS = (window.__PURCHASE_QS || '?') +
+            (window.__PURCHASE_QS ? '&' : '') + 'embed=admin';
+        const _adminZone = new URLSearchParams(location.search).get('zone');
+        if (_adminZone) {
+            // Map de zona producto -> palabras clave en zone_label del sector.
+            const _zoneToKeywords = {
+                'tribuna':     ['tribuna'],
+                'preferencia': ['preferenc', 'preferent'],
+                'fondo':       ['fondo'],
+                'joven':       [],
+                'palco-vip':   ['palco'],
+            };
+            const _kws = _zoneToKeywords[_adminZone] || [_adminZone];
+            window.__ADMIN_ALLOWED_ZONES = _kws;
+            // Diferimos el filtrado hasta que el SVG haya sido inyectado.
+            const _applyFilter = () => {
+                // Leer los botones data-sector y construir lista de svg_region permitidos.
+                const allowedRegions = new Set();
+                document.querySelectorAll('button[data-sector]').forEach(btn => {
+                    try {
+                        const d = JSON.parse(btn.getAttribute('data-sector'));
+                        const label = (d.zone_label || '').toLowerCase();
+                        if (_kws.some(k => label.includes(k))) {
+                            allowedRegions.add(String(d.svg_region));
+                        }
+                    } catch (e) {}
+                });
+                if (!allowedRegions.size) {
+                    // Aun no cargados los botones — reintentar.
+                    return false;
+                }
+                // Atenuar todos los .recinto-zona cuya data-region no esté en allowedRegions.
+                document.querySelectorAll('.recinto-zona[data-region]').forEach(el => {
+                    if (!allowedRegions.has(el.getAttribute('data-region'))) {
+                        el.style.opacity = '0.15';
+                        el.style.pointerEvents = 'none';
+                        el.style.filter = 'grayscale(100%)';
+                    } else {
+                        // Marcar destacados con un anillo rojo.
+                        el.style.outline = '3px solid #CF2E2E';
+                        el.style.outlineOffset = '2px';
+                    }
+                });
+                return true;
+            };
+            // Polling: hasta que los botones+SVG existan en el DOM.
+            let _tries = 0;
+            const _poll = setInterval(() => {
+                if (_applyFilter() || ++_tries > 30) clearInterval(_poll);
+            }, 200);
+        }
+    </script>
+@endif
+
 {{-- HERO --}}
 <section class="relative bg-algeciras-black text-white overflow-hidden py-16 lg:py-20">
     <div class="absolute inset-0 grano opacity-30 pointer-events-none"></div>
@@ -355,7 +486,7 @@
         const sector = SECTORS[target.dataset.region];
         if (!sector || !sector.available) return;
         // Navegar al detalle de butacas
-        window.location.href = '/estadio/sector/' + sector.svg_region;
+        window.location.href = '/estadio/sector/' + sector.svg_region + (window.__PURCHASE_QS || '');
     }, true); // capture: true por si algún tooltip de Bootstrap-Vue intercepta
 
     // Bonus: tap táctil en móvil → tras 1er tap muestra tooltip, 2º tap navega.
@@ -374,7 +505,7 @@
                 // Dispara mouseenter manualmente para mostrar tooltip
                 target.dispatchEvent(new MouseEvent('mouseenter'));
             } else {
-                window.location.href = '/estadio/sector/' + sector.svg_region;
+                window.location.href = '/estadio/sector/' + sector.svg_region + (window.__PURCHASE_QS || '');
             }
         }, { passive: false });
     }
@@ -386,7 +517,7 @@
             try {
                 const data = JSON.parse(btn.dataset.sector);
                 if (data && data.svg_region) {
-                    window.location.href = '/estadio/sector/' + data.svg_region;
+                    window.location.href = '/estadio/sector/' + data.svg_region + (window.__PURCHASE_QS || '');
                 }
             } catch (e) { /* ignore */ }
         });
