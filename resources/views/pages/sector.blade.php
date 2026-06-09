@@ -6,19 +6,37 @@
 @push('head')
 @if (request()->query('embed') === 'admin')
 <style>
-    body { background: #fff !important; }
-    header, footer, nav, [data-fx], .grano, .matchday-strip,
-    section.relative.bg-algeciras-black,
-    section[class*="bg-algeciras-black"],
-    .hero, .hero-section,
-    .sticky, #cookie-banner {
+    /* Solo aplica en embed=admin (iframe del modal del panel Filament).
+       NO afecta a la web pública (visitas normales a /estadio/sector/X). */
+    html, body {
+        background: #fff !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    /* Ocultar el chrome de la web publica. */
+    header, footer, nav, .grano, .matchday-strip,
+    .hero, .hero-section, .sticky, #cookie-banner {
         display: none !important;
     }
+    /* Ocultar el header "Cambiar zona" — el operador ya tiene la X del modal. */
+    main .bg-algeciras-black.text-white.py-6 { display: none !important; }
+    /* Ocultar el sidebar (foto + info + mini carrito + boton "Añadir al carrito").
+       En el flujo admin la butaca se elige con un solo click y se manda
+       automaticamente al form del panel via postMessage. */
+    main aside { display: none !important; }
+    /* Ocultar la barra "Terreno de juego" del header de la columna derecha. */
+    main .bg-algeciras-black.text-white.py-8 { display: none !important; }
+    /* La columna derecha (grilla butacas) pasa a ocupar todo el ancho. */
+    main .grid.lg\:grid-cols-5 { display: block !important; }
+    main .lg\:col-span-3 { width: 100% !important; max-width: none !important; }
+    /* Compactar layout. */
     main, .container, .max-w-7xl, .max-w-6xl, .max-w-5xl {
         max-width: 100% !important;
         margin: 0 !important;
         padding: 0.5rem !important;
     }
+    /* Anular cualquier opacity:0 que GSAP haya dejado pendiente. */
+    [data-fx] { opacity: 1 !important; visibility: visible !important; transform: none !important; }
 </style>
 @endif
 <style>
