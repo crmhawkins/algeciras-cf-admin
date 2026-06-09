@@ -48,15 +48,16 @@
                 </button>
             </div>
 
-            {{-- Modal Alpine — overlay con iframe del plano --}}
-            <div id="cm-modal-overlay"
-                 x-effect="document.getElementById('cm-modal-overlay').style.cssText = estadioModalOpen
-                    ? 'position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,.85); display: flex; align-items: center; justify-content: center; padding: 16px;'
-                    : 'display: none;'"
+            {{-- Modal Alpine teleportado al body para que Livewire/Filament no
+                 reseteen el style en cada morphdom. Sin teleport se renderiza
+                 inline dentro del form en vez de como overlay flotante. --}}
+            <template x-teleport="body">
+            <div x-show="estadioModalOpen"
+                 x-cloak
+                 style="position: fixed; inset: 0; z-index: 99999; background: rgba(0,0,0,.85); display: flex; align-items: center; justify-content: center; padding: 16px;"
                  @keydown.escape.window="closeEstadioModal()">
-                <div style="background: #fff; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0,0,0,.6); width: 96vw; max-width: 1600px; height: 92vh; display: flex; flex-direction: column; overflow: hidden;"
-                     @click.outside="closeEstadioModal()">
-                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; background: linear-gradient(to right, #dc2626, #b91c1c); color: white;">
+                <div style="background: #fff; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0,0,0,.6); width: 96vw; max-width: 1600px; height: 92vh; display: flex; flex-direction: column; overflow: hidden;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; background: linear-gradient(to right, #dc2626, #b91c1c); color: white; flex-shrink: 0;">
                         <div>
                             <div style="font-weight: 700; font-size: 18px;">🏟️ Plano del Estadio Nuevo Mirador</div>
                             <div style="font-size: 12px; opacity: .9;">
@@ -68,10 +69,11 @@
                                 style="background: rgba(255,255,255,.15); color: white; border: 0; border-radius: 50%; width: 36px; height: 36px; font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center;">×</button>
                     </div>
                     <iframe x-bind:src="iframeSrc"
-                            style="flex: 1; width: 100%; border: 0; min-height: 0;"
+                            style="flex: 1 1 auto; width: 100%; border: 0; min-height: 0; display: block;"
                             title="Plano del estadio"></iframe>
                 </div>
             </div>
+            </template>
 
             <script>
                 // Listener postMessage del iframe: actualiza inputs del form + cierra modal
