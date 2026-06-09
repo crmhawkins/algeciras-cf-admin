@@ -4,6 +4,23 @@
 @section('description', "Selecciona tu butaca en {$sector->name} del Estadio Nuevo Mirador")
 
 @push('head')
+@if (request()->query('embed') === 'admin')
+<style>
+    body { background: #fff !important; }
+    header, footer, nav, [data-fx], .grano, .matchday-strip,
+    section.relative.bg-algeciras-black,
+    section[class*="bg-algeciras-black"],
+    .hero, .hero-section,
+    .sticky, #cookie-banner {
+        display: none !important;
+    }
+    main, .container, .max-w-7xl, .max-w-6xl, .max-w-5xl {
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0.5rem !important;
+    }
+</style>
+@endif
 <style>
     .seat {
         width: 28px;
@@ -235,6 +252,23 @@ function seatPicker(sectorId, sectorName, priceAdult, priceYouth) {
             const idx = this.selected.findIndex(s => s.id === seat.id);
             if (idx >= 0) this.selected.splice(idx, 1);
             else this.selected.push(seat);
+
+            // 2026-06-09: modo embed=admin (panel Filament Renovacion/Abono Nuevo).
+            // En cuanto el usuario selecciona 1 butaca, mandar postMessage al
+            // window.parent y limpiar selección. Cerrar modal lo hace el padre.
+            const isAdminEmbed = new URLSearchParams(window.location.search).get('embed') === 'admin';
+            if (isAdminEmbed && this.selected.length > 0) {
+                const s = this.selected[0];
+                window.parent.postMessage({
+                    type: 'algeciras-admin-seat-pick',
+                    seat_id: s.id,
+                    sector_id: this.sectorId,
+                    sector_name: this.sectorName,
+                    row: s.row,
+                    number: s.number,
+                }, '*');
+                this.selected = [];
+            }
         },
         total() {
             return this.selected.length * this.priceAdult;
@@ -258,9 +292,46 @@ function seatPicker(sectorId, sectorName, priceAdult, priceYouth) {
                 return;
             }
 
-            // Flujo normal web: alert + futuro POST a /carrito/add
+            // 2026-06-09: modo `?embed=admin` — embebido como iframe en el panel
+            // Filament (Renovación/Abono nuevo). Envía la butaca al window.parent
+            // para que rellene los campos sector_id + seat_id del form.
+            const isAdminEmbed = new URLSearchParams(window.location.search).get('embed') === 'admin';
+            if (isAdminEmbed && this.selected.length > 0) {
+                const seat = this.selected[0];
+                window.parent.postMessage({
+                    type: 'algeciras-admin-seat-pick',
+                    seat_id: seat.id,
+                    sector_id: this.sectorId,
+                    sector_name: this.sectorName,
+                    row: seat.row,
+                    number: seat.number,
+                }, '*');
+                this.selected = [];
+                return;
+            }
+
+            // 2026-06-03: si venimos del flujo de compra (?product=slug en URL)
+            // redirigimos a /comprar-directo/{slug} con el primer asiento
+            // elegido como seat=ID. Soporta solo 1 butaca por compra por ahora.
+            const qs = new URLSearchParams(window.location.search);
+            const productSlug = qs.get('product');
+            if (productSlug && this.selected.length > 0) {
+                const seat = this.selected[0];
+                const params = new URLSearchParams({
+                    seat: seat.id,
+                    row: seat.row,
+                    number: seat.number,
+                    sector: this.sectorName,
+                });
+                const matchId = qs.get('match');
+                if (matchId) params.set('match', matchId);
+                window.location.href = '/comprar-directo/' + encodeURIComponent(productSlug) + '?' + params.toString();
+                return;
+            }
+
+            // Flujo informativo (visita normal del plano, sin product en URL).
             const seats = this.selected.map(s => `Fila ${s.row} · Butaca ${s.number}`).join('\n');
-            alert(`Añadidas al carrito ${this.selected.length} butacas de ${this.sectorName}:\n\n${seats}\n\nTotal: ${this.total().toFixed(2).replace('.',',')}€\n\n(Próximamente integración real con CartService.)`);
+            alert(`Has elegido ${this.selected.length} butacas de ${this.sectorName}:\n\n${seats}\n\nPara comprarlas accede desde "Hazte abonado" o "Entradas".`);
             this.selected = [];
         },
     };
