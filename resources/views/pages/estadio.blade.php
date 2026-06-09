@@ -111,25 +111,55 @@
            inicial (opacity:0 + transform pendiente de scroll) que no
            se hubiera revelado a tiempo. */
         [data-fx] { opacity: 1 !important; visibility: visible !important; transform: none !important; }
-        /* La section del plano: cambiar fondo a blanco y compactar padding
-           para aprovechar el espacio del modal Filament. */
-        section.relative.bg-algeciras-black,
-        section[class*="bg-algeciras-black"] {
-            background: #fff !important;
-            color: #111 !important;
-            padding: 0.5rem !important;
-        }
-        section.relative.bg-algeciras-black *,
-        section[class*="bg-algeciras-black"] * {
-            color: #111 !important;
-        }
-        main, .container, .max-w-7xl, .max-w-6xl, .max-w-5xl {
-            max-width: 100% !important;
+        html, body {
             margin: 0 !important;
-            padding: 0.5rem !important;
+            padding: 0 !important;
+            background: #fff !important;
+            overflow: hidden !important;
+            height: 100vh !important;
+            width: 100vw !important;
         }
-        /* Maximizar el area del SVG dentro del modal */
-        svg { width: 100% !important; height: auto !important; max-height: 75vh !important; }
+        /* Ocultar el hero negro y todas las secciones EXCEPTO la que tiene
+           el plano interactivo (la que contiene #plano-wrapper). */
+        section.relative.bg-algeciras-black,
+        section.bg-algeciras-cream {
+            display: none !important;
+        }
+        /* Section restante (la que contiene leyenda + #plano-wrapper):
+           sin padding y centrada. */
+        section.container.mx-auto {
+            padding: 0 !important;
+            margin: 0 !important;
+            max-width: 100vw !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        /* Ocultar la leyenda dentro de esa section — solo queremos el plano. */
+        section.container.mx-auto > div.flex.flex-wrap.gap-3 { display: none !important; }
+        /* Wrapper del plano: ocupa todo el viewport del iframe. */
+        #plano-wrapper {
+            background: #fff !important;
+            border: 0 !important;
+            padding: 8px !important;
+            margin: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            box-sizing: border-box !important;
+        }
+        /* El SVG ocupa todo el plano-wrapper manteniendo aspect ratio. */
+        #plano-estadio {
+            width: auto !important;
+            height: 100% !important;
+            max-width: 100% !important;
+            max-height: 100% !important;
+            display: block !important;
+        }
     </style>
     <script>
         window.__PURCHASE_QS = (window.__PURCHASE_QS || '?') +
