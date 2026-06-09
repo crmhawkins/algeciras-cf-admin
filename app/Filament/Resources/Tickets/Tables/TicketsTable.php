@@ -81,8 +81,9 @@ class TicketsTable
                         if (! $record->qr_image_path) {
                             return null;
                         }
-                        // QrService guarda 'storage/tickets/xxx.png' — asset() devuelve URL pública.
-                        return asset($record->qr_image_path);
+                        // QrService guarda en disk 'public' como 'qr/xxx.png'.
+                        // Storage::url resuelve via symlink public/storage → storage/app/public.
+                        return \Illuminate\Support\Facades\Storage::disk('public')->url($record->qr_image_path);
                     }),
 
                 TextColumn::make('holder_dni')

@@ -63,7 +63,9 @@ class TicketInfolist
                         ImageEntry::make('qr_image_path')
                             ->label('')
                             ->height(240)
-                            ->getStateUsing(fn ($record) => $record?->qr_image_path ? asset($record->qr_image_path) : null),
+                            ->getStateUsing(fn ($record) => $record?->qr_image_path
+                                ? \Illuminate\Support\Facades\Storage::disk('public')->url($record->qr_image_path)
+                                : null),
                     ]),
             ]);
     }
