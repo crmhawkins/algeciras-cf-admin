@@ -141,33 +141,7 @@ class CheckoutService
                 'payment_intent_id' => $paymentIntentId ?: $order->payment_intent_id,
             ]);
 
-            foreach ($order->items()->with('product')->get() as $item) {
-                if (!in_array($item->product_type, ['abono', 'entrada'])) {
-                    continue;
-                }
-
-                for ($i = 0; $i < $item->qty; $i++) {
-                    $ticket = Ticket::create([
-                        'order_item_id' => $item->id,
-                        'customer_id'   => $order->customer_id,
-                        'product_id'    => $item->product_id,
-                        'match_id'      => $item->product->match_id ?? null,
-                        'season_id'     => $item->product->season_id ?? null,
-                        'zone_id'       => $item->product->zone_id ?? null,
-                        'holder_name'   => trim(
-                            ($order->customer?->first_name ?? '') . ' ' .
-                            ($order->customer?->last_name ?? '')
-                        ),
-                        'holder_dni'    => $order->customer?->dni,
-                        'status'        => 'issued',
-                    ]);
-                    $this->qrService->generate($ticket);
-                }
-
-                if ($item->product) {
-                    $item->product->increment('sold', $item->qty);
-                }
-            }
+            $this->generateTicketsForOrder($order);
 
             Log::info('Order pagada', [
                 'order_id'  => $order->id,
@@ -176,8 +150,78 @@ class CheckoutService
                 'pi_id'     => $order->payment_intent_id,
             ]);
 
-            return $order->load('items.product', 'tickets', 'customer');
+            $fresh = $order->load('items.product', 'tickets', 'customer');
+
+            // Email de confirmación al cliente (best-effort). Si SMTP no
+            // está bien configurado fallamos en silencio — el log queda
+            // para revisarlo y reenviar manualmente.
+            try {
+                $to = $fresh->customer?->email ?: $fresh->guest_email;
+                if ($to) {
+                    \Illuminate\Support\Facades\Mail::send(
+                        'emails.order-confirmation',
+                        ['order' => $fresh],
+                        function ($m) use ($to, $fresh) {
+                            $m->to($to)
+                              ->subject('Algeciras CF · Confirmación de tu compra '.$fresh->reference);
+                        }
+                    );
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Email confirmación NO enviado', [
+                    'order' => $fresh->reference,
+                    'err'   => $e->getMessage(),
+                ]);
+            }
+
+            return $fresh;
         });
+    }
+
+    /**
+     * Genera Tickets QR (uno por unidad) para todos los items abono/entrada
+     * del Order. Idempotente: salta items que ya tengan tickets creados.
+     *
+     * Usado por:
+     *   - markOrderPaid() durante el flujo Redsys/Stripe
+     *   - CobroManual cuando crea Order directamente como 'paid'
+     */
+    public function generateTicketsForOrder(Order $order): void
+    {
+        foreach ($order->items()->with('product')->get() as $item) {
+            if (!in_array($item->product_type, ['abono', 'entrada'])) {
+                continue;
+            }
+
+            // Idempotencia: si ya existen tickets para este item, no duplicar.
+            $existing = Ticket::where('order_item_id', $item->id)->count();
+            if ($existing >= $item->qty) {
+                continue;
+            }
+            $toCreate = $item->qty - $existing;
+
+            for ($i = 0; $i < $toCreate; $i++) {
+                $ticket = Ticket::create([
+                    'order_item_id' => $item->id,
+                    'customer_id'   => $order->customer_id,
+                    'product_id'    => $item->product_id,
+                    'match_id'      => $item->product->match_id ?? null,
+                    'season_id'     => $item->product->season_id ?? null,
+                    'zone_id'       => $item->product->zone_id ?? null,
+                    'holder_name'   => trim(
+                        ($order->customer?->first_name ?? '') . ' ' .
+                        ($order->customer?->last_name ?? '')
+                    ),
+                    'holder_dni'    => $order->customer?->dni,
+                    'status'        => 'issued',
+                ]);
+                $this->qrService->generate($ticket);
+            }
+
+            if ($item->product && $toCreate > 0) {
+                $item->product->increment('sold', $toCreate);
+            }
+        }
     }
 
     /**
