@@ -152,30 +152,78 @@ class CheckoutService
 
             $fresh = $order->load('items.product', 'tickets', 'customer');
 
-            // Email de confirmación al cliente (best-effort). Si SMTP no
-            // está bien configurado fallamos en silencio — el log queda
-            // para revisarlo y reenviar manualmente.
-            try {
-                $to = $fresh->customer?->email ?: $fresh->guest_email;
-                if ($to) {
-                    \Illuminate\Support\Facades\Mail::send(
-                        'emails.order-confirmation',
-                        ['order' => $fresh],
-                        function ($m) use ($to, $fresh) {
-                            $m->to($to)
-                              ->subject('Algeciras CF · Confirmación de tu compra '.$fresh->reference);
-                        }
-                    );
-                }
-            } catch (\Throwable $e) {
-                Log::warning('Email confirmación NO enviado', [
-                    'order' => $fresh->reference,
-                    'err'   => $e->getMessage(),
-                ]);
-            }
+            $this->sendOrderConfirmationEmail($fresh);
 
             return $fresh;
         });
+    }
+
+    /**
+     * Envia el email de confirmacion al cliente con resumen del pedido y los
+     * PNG de los QR de cada ticket como adjuntos.
+     *
+     * Hace override SMTP en runtime con las credenciales validadas (Coolify
+     * inyecta env vars distintas para info@algecirasclubdefutbol.com sin
+     * password). Cuando se actualicen las vars del panel Coolify este metodo
+     * sera no-op y se usara la config persistida.
+     *
+     * Best-effort: si falla solo se loguea, NO rompe la compra.
+     */
+    public function sendOrderConfirmationEmail(Order $order): void
+    {
+        try {
+            $to = $order->customer?->email ?: $order->guest_email;
+            if (!$to) { return; }
+
+            // Override SMTP en runtime — TEMPORAL hasta que se actualicen
+            // las env vars de Coolify. Documentar en task #99.
+            \Illuminate\Support\Facades\Config::set('mail.mailers.smtp.host',       'smtp.ionos.es');
+            \Illuminate\Support\Facades\Config::set('mail.mailers.smtp.port',       465);
+            \Illuminate\Support\Facades\Config::set('mail.mailers.smtp.encryption', 'ssl');
+            \Illuminate\Support\Facades\Config::set('mail.mailers.smtp.username',   'presupuestos@crmhawkins.com');
+            \Illuminate\Support\Facades\Config::set('mail.mailers.smtp.password',   'B43y,2021');
+            \Illuminate\Support\Facades\Config::set('mail.from.address',            'presupuestos@crmhawkins.com');
+            \Illuminate\Support\Facades\Config::set('mail.from.name',               'Algeciras CF');
+
+            // Reconstruir el mailer con la config nueva.
+            app('mail.manager')->forgetMailers();
+
+            // Localizar los QR PNG de cada ticket para adjuntarlos.
+            $qrAttachments = [];
+            foreach ($order->tickets ?? [] as $tk) {
+                if (!$tk->qr_image_path) { continue; }
+                $absPath = storage_path('app/public/' . $tk->qr_image_path);
+                if (is_file($absPath)) {
+                    $qrAttachments[] = [
+                        'path' => $absPath,
+                        'name' => 'qr_' . $order->reference . '_' . $tk->id . '.png',
+                    ];
+                }
+            }
+
+            \Illuminate\Support\Facades\Mail::send(
+                'emails.order-confirmation',
+                ['order' => $order],
+                function ($m) use ($to, $order, $qrAttachments) {
+                    $m->to($to)
+                      ->subject('Algeciras CF · Confirmación de tu compra ' . $order->reference);
+                    foreach ($qrAttachments as $a) {
+                        $m->attach($a['path'], ['as' => $a['name'], 'mime' => 'image/png']);
+                    }
+                }
+            );
+
+            Log::info('Email confirmacion enviado', [
+                'order' => $order->reference,
+                'to'    => $to,
+                'qrs'   => count($qrAttachments),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Email confirmacion NO enviado', [
+                'order' => $order->reference ?? null,
+                'err'   => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
