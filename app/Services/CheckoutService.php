@@ -188,35 +188,62 @@ class CheckoutService
             // Reconstruir el mailer con la config nueva.
             app('mail.manager')->forgetMailers();
 
-            // Localizar los QR PNG de cada ticket para adjuntarlos.
-            $qrAttachments = [];
+            // Para cada ticket: localizar el QR PNG y generar PDF "Abono digital"
+            // con datos del titular + QR embebido. Ambos van adjuntos al email.
+            $attachments = [];
             foreach ($order->tickets ?? [] as $tk) {
-                if (!$tk->qr_image_path) { continue; }
-                $absPath = storage_path('app/public/' . $tk->qr_image_path);
-                if (is_file($absPath)) {
-                    $qrAttachments[] = [
+                // 1) QR como PNG suelto (escaneable directo desde el movil)
+                $absPath = $tk->qr_image_path ? storage_path('app/public/' . $tk->qr_image_path) : null;
+                if ($absPath && is_file($absPath)) {
+                    $attachments[] = [
                         'path' => $absPath,
                         'name' => 'qr_' . $order->reference . '_' . $tk->id . '.png',
+                        'mime' => 'image/png',
                     ];
+                }
+
+                // 2) PDF "Abono digital" con QR embebido (base64) + datos titular
+                try {
+                    $pdfPath = $this->generateTicketPdf($order, $tk);
+                    if ($pdfPath) {
+                        $attachments[] = [
+                            'path' => $pdfPath,
+                            'name' => 'abono_' . $order->reference . '_' . $tk->id . '.pdf',
+                            'mime' => 'application/pdf',
+                        ];
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('No se pudo generar PDF abono', [
+                        'order'  => $order->reference,
+                        'ticket' => $tk->id,
+                        'err'    => $e->getMessage(),
+                    ]);
                 }
             }
 
             \Illuminate\Support\Facades\Mail::send(
                 'emails.order-confirmation',
                 ['order' => $order],
-                function ($m) use ($to, $order, $qrAttachments) {
+                function ($m) use ($to, $order, $attachments) {
                     $m->to($to)
                       ->subject('Algeciras CF · Confirmación de tu compra ' . $order->reference);
-                    foreach ($qrAttachments as $a) {
-                        $m->attach($a['path'], ['as' => $a['name'], 'mime' => 'image/png']);
+                    foreach ($attachments as $a) {
+                        $m->attach($a['path'], ['as' => $a['name'], 'mime' => $a['mime']]);
                     }
                 }
             );
 
+            // Limpiar PDFs temporales tras enviar
+            foreach ($attachments as $a) {
+                if ($a['mime'] === 'application/pdf' && is_file($a['path']) && str_starts_with($a['path'], sys_get_temp_dir())) {
+                    @unlink($a['path']);
+                }
+            }
+
             Log::info('Email confirmacion enviado', [
-                'order' => $order->reference,
-                'to'    => $to,
-                'qrs'   => count($qrAttachments),
+                'order'       => $order->reference,
+                'to'          => $to,
+                'attachments' => count($attachments),
             ]);
         } catch (\Throwable $e) {
             Log::warning('Email confirmacion NO enviado', [
@@ -224,6 +251,67 @@ class CheckoutService
                 'err'   => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Genera un PDF "Abono Digital" del ticket con QR embebido en base64,
+     * datos del titular, zona, sector/asiento, ref pedido. Guarda en tmp
+     * y devuelve la ruta absoluta (el caller borra tras adjuntar).
+     *
+     * Devuelve null si falla o si no hay barryvdh/laravel-dompdf instalado.
+     */
+    protected function generateTicketPdf(Order $order, $ticket): ?string
+    {
+        if (!class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            return null;
+        }
+
+        // Embeber el QR como data URI para que dompdf lo renderice sin red.
+        $qrBase64 = null;
+        if ($ticket->qr_image_path) {
+            $absPath = storage_path('app/public/' . $ticket->qr_image_path);
+            if (is_file($absPath)) {
+                $qrBase64 = 'data:image/png;base64,' . base64_encode(file_get_contents($absPath));
+            }
+        }
+
+        // Resolver datos de sector/asiento sin usar relacion eloquent (no existe
+        // 'seat' en Ticket — el seat_id apunta directamente a seats.id).
+        $asiento = null;
+        $zona    = 'General';
+        if ($ticket->seat_id) {
+            $seat = \App\Models\Seat::with('sector')->find($ticket->seat_id);
+            if ($seat) {
+                $sectorName = $seat->sector?->name ?? ('Sector ' . $seat->sector_id);
+                $asiento    = $sectorName . ' · Fila ' . $seat->row . ' · Butaca ' . $seat->number;
+                $zona       = $seat->sector?->zone_label ?? $sectorName;
+            }
+        } elseif ($ticket->product) {
+            // Sin asiento concreto (abono Fondo, abono Joven, etc.) -> zona del producto
+            $zona = $ticket->product->zone?->name ?? $ticket->product->name;
+        }
+
+        $data = [
+            'titular'    => $ticket->holder_name ?: trim(($order->customer?->first_name ?? '') . ' ' . ($order->customer?->last_name ?? '')),
+            'dni'        => $ticket->holder_dni ?: ($order->customer?->dni ?? ''),
+            'email'      => $order->customer?->email ?: $order->guest_email,
+            'producto'   => $ticket->product?->name ?? 'Abono Algeciras CF',
+            'zona'       => $zona,
+            'asiento'    => $asiento,
+            'temporada'  => '2026-27',
+            'referencia' => $order->reference,
+            'emitido'    => optional($order->paid_at ?? $order->created_at)->format('d/m/Y H:i'),
+            'qrBase64'   => $qrBase64,
+            'uuid'       => $ticket->uuid,
+        ];
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdfs.abono', $data)
+            ->setPaper('a4', 'portrait');
+
+        $tmpPath = tempnam(sys_get_temp_dir(), 'abono_') . '.pdf';
+        file_put_contents($tmpPath, $pdf->output());
+
+        return $tmpPath;
     }
 
     /**
