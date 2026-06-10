@@ -26,7 +26,8 @@
             },
             closeEstadioModal() { this.estadioModalOpen = false; this.iframeSrc = ''; }
          }"
-         @seat-picked.window="closeEstadioModal()">
+         @seat-picked.window="closeEstadioModal()"
+         @cm-open-estadio-modal.window="openEstadioModal()">
 
         <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-200">
             <strong>Cobro manual.</strong> Esta pantalla se usa en taquilla / oficina del club
@@ -37,16 +38,9 @@
         {{ $this->form }}
 
         @if (in_array(get_class($this), [App\Filament\Pages\AbonoNuevo::class, App\Filament\Pages\RenovacionAbono::class]))
-            {{-- Botón Alpine que dispara el modal con el plano --}}
-            <div class="flex">
-                <button type="button"
-                        @click="openEstadioModal()"
-                        class="inline-flex items-center gap-3 px-6 py-4 rounded-xl
-                               bg-red-600 hover:bg-red-700 text-white font-bold text-lg
-                               shadow-lg hover:shadow-xl transition-all">
-                    🏟️ Elegir butaca en el plano del estadio
-                </button>
-            </div>
+            {{-- El boton "Elegir butaca" ahora se renderiza DENTRO del form
+                 (Placeholder btn_elegir_butaca en CobroManual.php) justo encima
+                 del campo "Asiento elegido". Aqui solo queda el modal. --}}
 
             {{-- Modal Alpine teleportado al body para que Livewire/Filament no
                  reseteen el style en cada morphdom. Sin teleport se renderiza
