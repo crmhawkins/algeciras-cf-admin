@@ -17,8 +17,24 @@ class MatchAttendanceStatsWidget extends Widget
 
     protected static ?int $sort = -10;
 
-    // El polling lo hace la propia blade vista con wire:poll.30s; no uso el
-    // trait CanPoll porque en Filament 5 colisiona con la propiedad estática.
+    // El polling lo hace la propia blade vista con wire:poll.{intervalo};
+    // no uso el trait CanPoll porque en Filament 5 colisiona con la
+    // propiedad estática.
+
+    /**
+     * Intervalo de polling para wire:poll en la blade. null = sin polling.
+     * Usado por match-attendance-stats.blade.php para construir el atributo
+     * wire:poll.30s en modo live, sin polling en upcoming/none.
+     */
+    public function getPollingInterval(): ?string
+    {
+        $now = now();
+        $hayLive = FootballMatch::query()
+            ->whereBetween('kickoff_at', [$now->copy()->subHours(4), $now->copy()->addHours(4)])
+            ->exists();
+
+        return $hayLive ? '30s' : null;
+    }
 
     /**
      * Datos para la vista.

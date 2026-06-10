@@ -32,7 +32,7 @@ class AdminPanelProvider extends PanelProvider
             ->login()
             ->brandName('Algeciras CF — Admin')
             ->brandLogoHeight('2.5rem')
-            ->favicon(asset('favicon.ico'))
+            ->favicon(secure_asset('favicon.ico'))
             ->darkMode(true)
             ->colors([
                 'primary' => Color::hex('#E30A2C'),
@@ -44,15 +44,9 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->font('Inter')
             ->navigationGroups([
-                NavigationGroup::make('Contenido de la web')
-                    ->icon(Heroicon::OutlinedNewspaper)
-                    ->collapsible(),
-                NavigationGroup::make('Atención al usuario')
-                    ->icon(Heroicon::OutlinedUserGroup)
-                    ->collapsible(),
-                NavigationGroup::make('Datos económicos')
-                    ->icon(Heroicon::OutlinedBanknotes)
-                    ->collapsible(),
+                NavigationGroup::make('Contenido de la web')->collapsible(),
+                NavigationGroup::make('Atención al usuario')->collapsible(),
+                NavigationGroup::make('Datos económicos')->collapsible(),
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
