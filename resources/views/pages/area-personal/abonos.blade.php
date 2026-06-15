@@ -34,14 +34,23 @@
                     <div class="md:w-2 bg-algeciras-red"></div>
 
                     <div class="flex-1 p-5 md:p-6 flex flex-col md:flex-row gap-5 items-center">
-                        {{-- QR --}}
-                        <div class="w-28 h-28 flex-shrink-0 bg-algeciras-cream grid place-items-center border border-algeciras-black/10">
-                            @if($t->qr_image_path)
-                                <img src="{{ asset($t->qr_image_path) }}" alt="QR" class="w-full h-full object-contain">
+                        {{-- QR del abono — estático toda la temporada (payload v1).
+                             Antes usábamos asset() pero el path qr/X.png se sirve
+                             desde storage/app/public via Storage::url → /storage/qr/X.png.
+                             Si el ticket aún no tiene PNG (cosa de tickets viejos)
+                             lo generamos on-demand para esta vista. --}}
+                        @php
+                            if (empty($t->qr_image_path)) {
+                                try { app(\App\Services\QrService::class)->generate($t); $t->refresh(); }
+                                catch (\Throwable $e) { /* silent */ }
+                            }
+                            $qrSrc = $t->qr_image_path ? \Illuminate\Support\Facades\Storage::url($t->qr_image_path) : null;
+                        @endphp
+                        <div class="w-28 h-28 flex-shrink-0 bg-white grid place-items-center border border-algeciras-black/10">
+                            @if($qrSrc)
+                                <img src="{{ $qrSrc }}" alt="QR del abono nº {{ $t->id }}" class="w-full h-full object-contain">
                             @else
-                                <span class="font-mono text-[9px] text-algeciras-gray text-center break-all p-2">
-                                    {{ \Illuminate\Support\Str::limit($t->uuid, 14) }}
-                                </span>
+                                <span class="font-mono text-[9px] text-algeciras-gray text-center break-all p-2">QR no disponible</span>
                             @endif
                         </div>
 

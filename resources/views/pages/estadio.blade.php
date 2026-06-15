@@ -164,6 +164,10 @@
     <script>
         window.__PURCHASE_QS = (window.__PURCHASE_QS || '?') +
             (window.__PURCHASE_QS ? '&' : '') + 'embed=admin';
+        // Propagar modo NUEVA ALTA al link del sector (clic en zona del plano).
+        if (new URLSearchParams(location.search).get('alta') === '1') {
+            window.__PURCHASE_QS += '&alta=1';
+        }
         const _adminZone = new URLSearchParams(location.search).get('zone');
         if (_adminZone) {
             // Map de zona producto -> palabras clave en zone_label del sector.

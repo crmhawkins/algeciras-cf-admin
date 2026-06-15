@@ -256,6 +256,12 @@
                             <a href="{{ route('aviso-legal') }}" target="_blank" class="text-algeciras-red underline">aviso legal</a>.
                         </span>
                     </label>
+
+                    <p class="mt-3 text-xs text-gray-500 leading-snug">
+                        El cobro lo procesa <strong>{{ config('club.comercio.razon_social') }}</strong>
+                        (CIF {{ config('club.comercio.cif') }}) mediante TPV Virtual de Banco Sabadell.
+                        El cargo en tu tarjeta figurará a nombre de este comercio.
+                    </p>
                 </section>
 
                 <a href="{{ route('redsys.start', $order->reference) }}"
