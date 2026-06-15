@@ -24,8 +24,11 @@
        En el flujo admin la butaca se elige con un solo click y se manda
        automaticamente al form del panel via postMessage. */
     main aside { display: none !important; }
-    /* Ocultar la barra "Terreno de juego" del header de la columna derecha. */
+    @if (request()->query('alta') !== '1')
+    /* Ocultar la barra "Terreno de juego" en modo modal (renovación/cambio).
+       En modo nueva alta (alta=1) SÍ se muestra, como en el sistema del cliente. */
     main .bg-algeciras-black.text-white.py-8 { display: none !important; }
+    @endif
     /* La columna derecha (grilla butacas) pasa a ocupar todo el ancho. */
     main .grid.lg\:grid-cols-5 { display: block !important; }
     main .lg\:col-span-3 { width: 100% !important; max-width: none !important; }
@@ -37,6 +40,12 @@
     }
     /* Anular cualquier opacity:0 que GSAP haya dejado pendiente. */
     [data-fx] { opacity: 1 !important; visibility: visible !important; transform: none !important; }
+
+    /* PLANO INTERNO (admin / renovación): código de colores del cliente
+       verde=libre · NARANJA=abonado pendiente de renovar · NEGRO=renovado · gris=bloqueado */
+    .seat.reserved { background: #f59e0b !important; opacity: 1 !important; } /* naranja */
+    .seat.sold     { background: #111827 !important; opacity: 1 !important; } /* negro */
+    .seat.blocked  { background: #6b7280 !important; opacity: 1 !important; } /* gris */
 </style>
 @endif
 <style>
@@ -57,8 +66,10 @@
     }
     .seat.free        { background: #7fbf3f; }
     .seat.free:hover  { transform: scale(1.18); box-shadow: 0 0 0 3px rgba(127,191,63,0.3); z-index: 5; position: relative; }
-    .seat.sold        { background: #CF2E2E; cursor: not-allowed; opacity: 0.7; }
-    .seat.reserved    { background: #f59e0b; cursor: not-allowed; opacity: 0.6; }
+    /* PLANO EXTERNO (web pública / compra online): verde=libre, ROJO=todo lo no libre */
+    .seat.sold        { background: #CF2E2E; cursor: not-allowed; opacity: 0.85; }
+    .seat.reserved    { background: #CF2E2E; cursor: not-allowed; opacity: 0.85; }
+    .seat.blocked     { background: #CF2E2E; cursor: not-allowed; opacity: 0.85; }
     .seat.selected    { background: #5a9bd5; transform: scale(1.2); box-shadow: 0 0 0 3px rgba(90,155,213,0.5); }
     .seat-row {
         display: flex;
@@ -244,12 +255,23 @@
                 @endforeach
             </div>
 
-            {{-- Leyenda --}}
-            <div class="flex justify-center gap-6 mt-8 flex-wrap">
-                <div class="flex items-center gap-2"><span class="seat free" style="cursor:default"></span><span class="font-display tracking-widest uppercase text-sm">Disponible</span></div>
-                <div class="flex items-center gap-2"><span class="seat sold" style="cursor:default;opacity:1"></span><span class="font-display tracking-widest uppercase text-sm">Ocupado</span></div>
-                <div class="flex items-center gap-2"><span class="seat selected" style="cursor:default;transform:none"></span><span class="font-display tracking-widest uppercase text-sm">Seleccionado</span></div>
-            </div>
+            {{-- Leyenda — distinta en plano interno (admin) y externo (público) --}}
+            @if (request()->query('embed') === 'admin')
+                {{-- INTERNO: verde libre / naranja pendiente / negro renovado --}}
+                <div class="flex justify-center gap-6 mt-8 flex-wrap">
+                    <div class="flex items-center gap-2"><span class="seat" style="background:#7fbf3f;cursor:default"></span><span class="font-display tracking-widest uppercase text-sm">Libre</span></div>
+                    <div class="flex items-center gap-2"><span class="seat" style="background:#f59e0b;cursor:default"></span><span class="font-display tracking-widest uppercase text-sm">Pendiente de renovar</span></div>
+                    <div class="flex items-center gap-2"><span class="seat" style="background:#111827;cursor:default"></span><span class="font-display tracking-widest uppercase text-sm">Renovado</span></div>
+                    <div class="flex items-center gap-2"><span class="seat selected" style="cursor:default;transform:none"></span><span class="font-display tracking-widest uppercase text-sm">Seleccionado</span></div>
+                </div>
+            @else
+                {{-- EXTERNO: verde libre / rojo ocupado --}}
+                <div class="flex justify-center gap-6 mt-8 flex-wrap">
+                    <div class="flex items-center gap-2"><span class="seat free" style="cursor:default"></span><span class="font-display tracking-widest uppercase text-sm">Disponible</span></div>
+                    <div class="flex items-center gap-2"><span class="seat sold" style="cursor:default;opacity:1"></span><span class="font-display tracking-widest uppercase text-sm">Ocupado</span></div>
+                    <div class="flex items-center gap-2"><span class="seat selected" style="cursor:default;transform:none"></span><span class="font-display tracking-widest uppercase text-sm">Seleccionado</span></div>
+                </div>
+            @endif
         </div>
     </div>
 </div>
@@ -267,6 +289,18 @@ function seatPicker(sectorId, sectorName, priceAdult, priceYouth) {
             return this.selected.some(s => s.id === id);
         },
         toggle(seat) {
+            const params = new URLSearchParams(window.location.search);
+
+            // 2026-06-10: modo NUEVA ALTA (?alta=1). Al pulsar una butaca libre,
+            // ir directamente al cobro de alta con sector + asiento preseleccionados.
+            // window.top por si la grilla está dentro del iframe del panel.
+            if (params.get('alta') === '1') {
+                const url = '/admin/cobro-manual?tipo=abono&variante=nuevo&modo=nuevo'
+                    + '&sector_id=' + this.sectorId + '&seat_id=' + seat.id;
+                (window.top || window).location.href = url;
+                return;
+            }
+
             const idx = this.selected.findIndex(s => s.id === seat.id);
             if (idx >= 0) this.selected.splice(idx, 1);
             else this.selected.push(seat);

@@ -72,6 +72,14 @@ class AreaPersonalController extends Controller
         if (Auth::attempt(['email' => $data['email'], 'password' => $data['password']], $remember)) {
             $request->session()->regenerate();
             Auth::user()->update(['last_login_at' => now()]);
+
+            // Si el usuario venía de /comprar-directo y le mandamos al
+            // login, reanudamos su compra automáticamente.
+            $resume = $request->session()->pull('intended_purchase');
+            if ($resume) {
+                return redirect($resume);
+            }
+
             return redirect()->intended(route('area-personal'));
         }
 
@@ -90,19 +98,40 @@ class AreaPersonalController extends Controller
             )) ?: null,
         ]);
 
+        // Registro completo (regla del cliente 2026-06-02): todos los datos
+        // identificativos del socio son obligatorios — el club necesita
+        // nombre completo, DNI, dirección física, teléfono, email y fecha
+        // de nacimiento para emitir el carnet y cumplir LOPD/AEAT.
         $data = $request->validate([
-            'name'       => 'required|string|max:120',
-            'first_name' => 'nullable|string|max:80',
-            'last_name'  => 'nullable|string|max:80',
-            'email'      => 'required|email|unique:users,email',
-            'password'   => 'required|string|min:6|confirmed',
-            'phone'      => 'nullable|string|max:32',
-            'dni'        => 'nullable|string|max:24|unique:customers,dni',
+            'name'        => 'required|string|max:120',
+            'first_name'  => 'required|string|max:80',
+            'last_name'   => 'required|string|max:80',
+            'email'       => 'required|email|unique:users,email',
+            'password'    => 'required|string|min:6|confirmed',
+            'phone'       => 'required|string|min:9|max:32',
+            'dni'         => 'required|string|max:24|unique:customers,dni',
+            'birth_date'  => ['required', 'date', 'before:'.now()->subYears(14)->format('Y-m-d'), 'after:'.now()->subYears(110)->format('Y-m-d')],
+            'address'     => 'required|string|max:255',
+            'city'        => 'required|string|max:120',
+            'postal_code' => 'required|string|regex:/^[0-9]{5}$/',
+            'province'    => 'nullable|string|max:120',
         ], [
-            'email.unique'   => 'Ya existe una cuenta con este email. Inicia sesión.',
-            'dni.unique'     => 'Ya existe una cuenta con este DNI.',
-            'password.min'   => 'La contraseña debe tener al menos 6 caracteres.',
-            'password.confirmed' => 'Las contraseñas no coinciden.',
+            'email.unique'        => 'Ya existe una cuenta con este email. Inicia sesión.',
+            'dni.unique'          => 'Ya existe una cuenta con este DNI.',
+            'dni.required'        => 'El DNI es obligatorio.',
+            'phone.required'      => 'El teléfono es obligatorio.',
+            'phone.min'           => 'El teléfono no es válido.',
+            'birth_date.required' => 'La fecha de nacimiento es obligatoria.',
+            'birth_date.before'   => 'Debes ser mayor de 14 años.',
+            'birth_date.after'    => 'Fecha de nacimiento no válida.',
+            'address.required'    => 'La dirección es obligatoria.',
+            'city.required'       => 'La ciudad es obligatoria.',
+            'postal_code.required'=> 'El código postal es obligatorio.',
+            'postal_code.regex'   => 'El código postal debe tener 5 dígitos.',
+            'first_name.required' => 'El nombre es obligatorio.',
+            'last_name.required'  => 'Los apellidos son obligatorios.',
+            'password.min'        => 'La contraseña debe tener al menos 6 caracteres.',
+            'password.confirmed'  => 'Las contraseñas no coinciden.',
         ]);
 
         $user = User::create([
@@ -121,16 +150,28 @@ class AreaPersonalController extends Controller
         }
 
         Customer::create([
-            'user_id'    => $user->id,
-            'email'      => $data['email'],
-            'first_name' => $first,
-            'last_name'  => $last ?: '',  // ← columna NOT NULL en BD
-            'phone'      => $data['phone'] ?? null,
-            'dni'        => $data['dni']   ?? null,
+            'user_id'     => $user->id,
+            'email'       => $data['email'],
+            'first_name'  => $first,
+            'last_name'   => $last ?: '',  // ← columna NOT NULL en BD
+            'phone'       => $data['phone'] ?? null,
+            'dni'         => $data['dni']   ?? null,
+            'birth_date'  => $data['birth_date'] ?? null,
+            'address'     => $data['address']    ?? null,
+            'city'        => $data['city']       ?? null,
+            'postal_code' => $data['postal_code']?? null,
+            'province'    => $data['province']   ?? 'Cádiz',
+            'country'     => 'ES',
         ]);
 
         Auth::login($user);
         $request->session()->regenerate();
+
+        // Reanudar compra interrumpida si la había.
+        $resume = $request->session()->pull('intended_purchase');
+        if ($resume) {
+            return redirect($resume);
+        }
 
         return redirect()->route('area-personal');
     }
@@ -472,6 +513,142 @@ class AreaPersonalController extends Controller
         }
 
         return redirect()->route('area-personal.datos')->with('status', 'Datos actualizados correctamente.');
+    }
+
+    /** POST /area-personal/foto — subir foto perfil del socio.
+     *
+     * Reescala SIEMPRE a 600×600 max (manteniendo aspect ratio) y convierte
+     * a JPEG calidad 85. Una foto de iPhone 12MP (~6 MB) acabaría pesando
+     * ~80 kB y carga al instante en el carnet. Esto:
+     *  - Evita el 500 que sufría el usuario al subir fotos grandes (GD
+     *    se quedaba sin memoria leyendo el original).
+     *  - Mantiene el storage del servidor pequeño.
+     *  - Carga rápido en el carnet/sidebar.
+     */
+    public function subirFoto(Request $request)
+    {
+        [$user] = $this->ensureAuth();
+
+        $data = $request->validate([
+            'profile_image' => 'required|image|mimes:jpg,jpeg,png,webp|max:20480', // 20MB de subida (luego se reescala)
+        ], [
+            'profile_image.required' => 'Selecciona una imagen.',
+            'profile_image.image'    => 'El archivo debe ser una imagen.',
+            'profile_image.mimes'    => 'Formatos válidos: JPG, PNG o WEBP.',
+            'profile_image.max'      => 'La imagen no puede pesar más de 20MB.',
+        ]);
+
+        $upload = $data['profile_image'];
+
+        try {
+            // Reescalar con GD nativo (viene con PHP) — no necesita
+            // intervention/image ni más composer deps.
+            $resized = $this->reescalarImagenCuadrada($upload->getRealPath(), 600, 85);
+        } catch (\Throwable $e) {
+            \Log::warning('subirFoto reescalado fallo', [
+                'user' => $user->id,
+                'err'  => $e->getMessage(),
+            ]);
+            return back()->withErrors([
+                'profile_image' => 'No se pudo procesar la imagen. Prueba con otra (JPG/PNG, menos de 20MB).',
+            ]);
+        }
+
+        // Borramos foto previa si existía (evitamos basura en storage).
+        if ($user->profile_image) {
+            try {
+                \Illuminate\Support\Facades\Storage::disk('public')
+                    ->delete($user->profile_image);
+            } catch (\Throwable $e) { /* silent */ }
+        }
+
+        $relativePath = 'avatars/'.$user->id.'-'.\Illuminate\Support\Str::random(8).'.jpg';
+        \Illuminate\Support\Facades\Storage::disk('public')->put($relativePath, $resized);
+
+        $user->update(['profile_image' => $relativePath]);
+
+        return back()->with('status', 'Foto de perfil actualizada.');
+    }
+
+    /**
+     * Lee un archivo de imagen, lo reescala a un cuadrado de $size×$size
+     * (recortando lo necesario para mantener proporción 1:1 — ideal para
+     * carnet) y lo devuelve como binario JPEG.
+     */
+    protected function reescalarImagenCuadrada(string $sourcePath, int $size = 600, int $quality = 85): string
+    {
+        if (! function_exists('imagecreatetruecolor')) {
+            throw new \RuntimeException('GD no disponible en este PHP — no podemos procesar imágenes.');
+        }
+
+        // Sube el memory_limit puntualmente para fotos grandes (default
+        // 256M en el container ya es suficiente, esto es un cinturón extra).
+        @ini_set('memory_limit', '512M');
+
+        $info = @getimagesize($sourcePath);
+        if ($info === false) {
+            throw new \RuntimeException('No es una imagen válida.');
+        }
+        [$w, $h, $type] = $info;
+
+        $src = match ($type) {
+            IMAGETYPE_JPEG => @imagecreatefromjpeg($sourcePath),
+            IMAGETYPE_PNG  => @imagecreatefrompng($sourcePath),
+            IMAGETYPE_WEBP => function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($sourcePath) : false,
+            default        => false,
+        };
+        if (! $src) {
+            throw new \RuntimeException('Formato no soportado.');
+        }
+
+        // Corregir orientación EXIF si aplica (iPhone fotos vienen rotadas).
+        if ($type === IMAGETYPE_JPEG && function_exists('exif_read_data')) {
+            $exif = @exif_read_data($sourcePath);
+            $ori  = $exif['Orientation'] ?? null;
+            if (in_array($ori, [3, 6, 8], true) && function_exists('imagerotate')) {
+                $angle = ['3' => 180, '6' => -90, '8' => 90][(string) $ori] ?? 0;
+                if ($angle) {
+                    $src = imagerotate($src, $angle, 0);
+                    // recalculamos dimensiones tras la rotación
+                    $w = imagesx($src); $h = imagesy($src);
+                }
+            }
+        }
+
+        // Crop cuadrado centrado
+        $side = min($w, $h);
+        $srcX = (int) (($w - $side) / 2);
+        $srcY = (int) (($h - $side) / 2);
+
+        $dst = imagecreatetruecolor($size, $size);
+        // Para PNG con transparencia: fondo blanco (el carnet la usa con
+        // border-radius circular, no nos sirve fondo transparente).
+        $white = imagecolorallocate($dst, 255, 255, 255);
+        imagefilledrectangle($dst, 0, 0, $size, $size, $white);
+        imagecopyresampled($dst, $src, 0, 0, $srcX, $srcY, $size, $size, $side, $side);
+
+        ob_start();
+        imagejpeg($dst, null, $quality);
+        $binary = ob_get_clean();
+
+        imagedestroy($src);
+        imagedestroy($dst);
+
+        return $binary;
+    }
+
+    /** POST /area-personal/foto/eliminar */
+    public function eliminarFoto(Request $request)
+    {
+        [$user] = $this->ensureAuth();
+        if ($user->profile_image) {
+            try {
+                \Illuminate\Support\Facades\Storage::disk('public')
+                    ->delete($user->profile_image);
+            } catch (\Throwable $e) { /* silent */ }
+            $user->update(['profile_image' => null]);
+        }
+        return back()->with('status', 'Foto eliminada.');
     }
 
     /** POST /area-personal/cambiar-password */

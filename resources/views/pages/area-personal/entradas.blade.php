@@ -43,13 +43,18 @@
                 @foreach($activas as $t)
                     @php $r = $renderTicket($t); @endphp
                     <article class="bg-white border-2 border-algeciras-red shadow-brutal flex gap-4 p-4 clip-tarjeta">
-                        <div class="w-24 h-24 flex-shrink-0 bg-algeciras-cream grid place-items-center border border-algeciras-black/10">
-                            @if($t->qr_image_path)
-                                <img src="{{ asset($t->qr_image_path) }}" alt="QR" class="w-full h-full object-contain">
+                        @php
+                            if (empty($t->qr_image_path)) {
+                                try { app(\App\Services\QrService::class)->generate($t); $t->refresh(); }
+                                catch (\Throwable $e) { /* silent */ }
+                            }
+                            $qrSrc = $t->qr_image_path ? \Illuminate\Support\Facades\Storage::url($t->qr_image_path) : null;
+                        @endphp
+                        <div class="w-24 h-24 flex-shrink-0 bg-white grid place-items-center border border-algeciras-black/10">
+                            @if($qrSrc)
+                                <img src="{{ $qrSrc }}" alt="QR entrada nº {{ $t->id }}" class="w-full h-full object-contain">
                             @else
-                                <span class="font-mono text-[9px] text-algeciras-gray text-center break-all p-1">
-                                    {{ \Illuminate\Support\Str::limit($t->uuid, 12) }}
-                                </span>
+                                <span class="font-mono text-[9px] text-algeciras-gray text-center break-all p-1">QR no disponible</span>
                             @endif
                         </div>
                         <div class="flex-1 min-w-0">

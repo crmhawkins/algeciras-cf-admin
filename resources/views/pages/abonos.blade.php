@@ -46,14 +46,90 @@
             </a>
         </div>
     </section>
+@elseif (! empty($lookup ?? false))
+    {{-- Renovación: paso de verificación. Antes de mostrar las cards con
+         descuento de socio, pedimos número de abono + DNI y validamos
+         contra BD. Solo si encontramos al abonado le dejamos pasar. --}}
+    <section class="container mx-auto px-4 lg:px-8 py-16 max-w-2xl">
+        <div class="flex items-center gap-3 mb-6 flex-wrap">
+            <a href="{{ route('abonos') }}" class="font-display tracking-widest uppercase text-sm text-algeciras-red hover:underline">← Cambiar</a>
+            <span class="font-mono tracking-widest uppercase text-xs px-3 py-1 border-2 border-algeciras-red text-algeciras-red">
+                Renovación de socios
+            </span>
+        </div>
+
+        <h2 class="font-display text-4xl mb-3">Verifica tu condición de socio</h2>
+        <p class="text-algeciras-gray mb-8">
+            Para acceder a las tarifas con descuento de renovación, introduce
+            tu número de abono y DNI. Solo si eres socio actual del Algeciras
+            CF podrás comprar la tarifa reducida.
+        </p>
+
+        <form method="POST" action="{{ route('abonos.renovacion.lookup') }}" class="bg-white border-2 border-algeciras-black/10 p-6 space-y-4 shadow-brutal">
+            @csrf
+
+            @if ($errors->any())
+                <div class="bg-algeciras-red text-white p-3 text-sm">
+                    {{ $errors->first() }}
+                </div>
+            @endif
+
+            <div>
+                <label class="block font-display tracking-widest uppercase text-xs mb-2">Número de abonado *</label>
+                <input type="number" name="numero_abonado" required min="1"
+                       value="{{ old('numero_abonado') }}"
+                       placeholder="Ej. 1234"
+                       class="w-full px-4 py-3 border-2 border-algeciras-black/10 focus:border-algeciras-red focus:outline-none font-mono">
+                <p class="text-xs text-algeciras-gray mt-1">El que figura en tu carnet de socio.</p>
+            </div>
+
+            <div>
+                <label class="block font-display tracking-widest uppercase text-xs mb-2">DNI / NIE *</label>
+                <input type="text" name="dni" required value="{{ old('dni') }}"
+                       placeholder="12345678X"
+                       class="w-full px-4 py-3 border-2 border-algeciras-black/10 focus:border-algeciras-red focus:outline-none font-mono uppercase">
+                <p class="text-xs text-algeciras-gray mt-1">El DNI del titular del abono.</p>
+            </div>
+
+            <button type="submit" class="w-full px-6 py-4 bg-algeciras-red hover:bg-algeciras-red-dark text-white font-display tracking-widest uppercase shadow-brutal hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition">
+                Verificar y continuar →
+            </button>
+
+            <p class="text-xs text-algeciras-gray text-center pt-2">
+                ¿No eres socio? <a href="{{ url('/abonos?tipo=nuevo') }}" class="text-algeciras-red hover:underline">Ver tarifas de nuevo abonado →</a>
+            </p>
+        </form>
+    </section>
 @else
     <section class="container mx-auto px-4 lg:px-8 py-12">
-        <div class="flex items-center gap-3 mb-8 flex-wrap">
-            <a href="{{ route('abonos') }}" class="font-display tracking-widest uppercase text-sm text-algeciras-red hover:underline">← Cambiar</a>
+        <div class="flex items-center gap-3 mb-4 flex-wrap">
+            <a href="{{ route('abonos') }}" class="font-display tracking-widest uppercase text-sm text-algeciras-red hover:underline">← Cambiar tipo</a>
             <span class="font-mono tracking-widest uppercase text-xs px-3 py-1 border-2 border-algeciras-red text-algeciras-red">
                 {{ $tipo === 'renovacion' ? 'Renovación de socios' : 'Captación de nuevos' }}
             </span>
+            @if ($tipo === 'renovacion' && ($abonado ?? null))
+                <a href="{{ route('abonos.renovacion.reset') }}" class="font-mono tracking-widest uppercase text-xs text-algeciras-gray hover:text-algeciras-red ml-auto">Cambiar abonado</a>
+            @endif
         </div>
+
+        @if ($tipo === 'renovacion' && ($abonado ?? null))
+            {{-- Card con datos del socio verificado --}}
+            <div class="bg-algeciras-cream border-l-4 border-algeciras-red p-5 mb-8">
+                <p class="font-mono uppercase tracking-widest text-xs text-algeciras-red mb-1">Socio verificado</p>
+                <p class="font-display text-2xl">
+                    {{ trim(($abonado['nombre'] ?? '').' '.($abonado['apellidos'] ?? '')) }}
+                    <span class="text-algeciras-gray text-base font-normal">· Nº {{ $abonado['numero_abonado'] }}</span>
+                </p>
+                @if (! empty($abonado['sector_nombre']))
+                    <p class="text-sm text-algeciras-gray mt-1">
+                        {{ $abonado['sector_nombre'] }}
+                        @if (! empty($abonado['fila']))· Fila {{ $abonado['fila'] }}@endif
+                        @if (! empty($abonado['asiento']))· Asiento {{ $abonado['asiento'] }}@endif
+                        @if (! empty($abonado['season_name']))· Temporada {{ $abonado['season_name'] }}@endif
+                    </p>
+                @endif
+            </div>
+        @endif
 
         @if ($abonos->isEmpty())
             <p class="text-algeciras-gray">No hay tarifas activas para esta opción de momento.</p>
@@ -68,11 +144,16 @@
                         </div>
                         <h3 class="font-display text-2xl mb-4 leading-tight">{{ $a->getTranslation('name','es') }}</h3>
                         <div class="font-display text-5xl text-algeciras-red group-hover:text-white">{{ number_format((float)$a->price, 0) }}€</div>
-                        <p class="text-xs text-algeciras-gray group-hover:text-white/60 mt-2">IVA {{ $a->vat_rate }}% incluido</p>
+                        {{-- Petición cliente: SOLO precio en banner. Desglose IVA + gestión solo en checkout. --}}
                         <div class="flex flex-col gap-2 mt-4">
-                            <a href="{{ route('comprar-directo', ['product' => $a->slug]) }}"
+                            {{-- Antes saltaba directo al checkout — el cliente
+                                 protesta que primero hay que elegir zona y
+                                 butaca. Mandamos al plano del estadio con el
+                                 product en query; ahí elegirá sector/butaca y
+                                 desde la butaca se llega al checkout. --}}
+                            <a href="{{ route('estadio', ['product' => $a->slug]) }}"
                                class="inline-block px-4 py-3 bg-algeciras-red text-white font-display tracking-widest uppercase text-sm text-center shadow-brutal hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition">
-                                Comprar este abono →
+                                Elegir butaca →
                             </a>
                             <a href="{{ route('producto', $a->slug) }}"
                                class="text-xs text-algeciras-gray group-hover:text-white/60 underline text-center">Más info</a>

@@ -114,6 +114,31 @@ class MyAccountController extends Controller
 
     private function serializeTicket(Ticket $t, string $tipo): array
     {
+        // 2026-06-03: si el ticket no tiene PNG aún (tickets viejos antes
+        // del fix), lo generamos on-demand para que la app pueda mostrar
+        // el QR REAL firmado (el mismo que la web). Antes la app generaba
+        // un QR local con react-native-qrcode-svg que NO era firmado y
+        // NO se validaría en la puerta.
+        if (empty($t->qr_image_path)) {
+            try {
+                app(\App\Services\QrService::class)->generate($t);
+                $t->refresh();
+            } catch (\Throwable $e) {
+                \Log::warning('QR generate failed in serializeTicket', [
+                    'ticket' => $t->id, 'err' => $e->getMessage(),
+                ]);
+            }
+        }
+        // Storage::url ya devuelve URL absoluta cuando APP_URL está OK;
+        // si llegara relativa la prefijamos manualmente.
+        $qrAbsoluteUrl = null;
+        if ($t->qr_image_path) {
+            $u = \Illuminate\Support\Facades\Storage::url($t->qr_image_path);
+            $qrAbsoluteUrl = str_starts_with($u, 'http')
+                ? $u
+                : rtrim(config('app.url', 'https://algecirascf.hawkins.es'), '/').$u;
+        }
+
         return [
             'id'        => $t->id,
             'tipo'      => $tipo,
@@ -125,9 +150,17 @@ class MyAccountController extends Controller
             'zona'      => $t->zone ? ['id' => $t->zone->id, 'name' => $t->zone->name] : null,
             'fila'      => $t->row ?? null,
             'butaca'    => $t->seat_number ?? $t->seat ?? null,
-            'qr'        => $t->qr_token ?? $t->qr_code ?? $t->uuid ?? null,
-            'createdAt' => $t->created_at?->toIso8601String(),
-            'orderRef'  => null, // Ticket no tiene relación order directa
+            // Ahora devolvemos también la URL PNG real del QR para que la
+            // app móvil pinte la MISMA imagen que la web.
+            'qr'              => $t->qr_token ?? null,
+            'qrImagePath'     => $t->qr_image_path,
+            'qrImageUrl'      => $qrAbsoluteUrl,
+            // Aliases en español/inglés por compatibilidad con tipos varios
+            // existentes en la app RN sin tener que migrar todo a la vez.
+            'codigoAcceso'    => $t->qr_token ?? null,
+            'codigoAbonado'   => sprintf('ACF-%05d', $t->id),
+            'createdAt'       => $t->created_at?->toIso8601String(),
+            'orderRef'        => null,
         ];
     }
 }

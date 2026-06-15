@@ -51,7 +51,10 @@
                 <a href="{{ route('abonos') }}" class="inline-block px-8 py-4 bg-algeciras-red hover:bg-algeciras-red-light transition font-display tracking-widest uppercase text-lg shadow-brutal hover:translate-x-1 hover:translate-y-1 hover:shadow-none">
                     Hazte abonado →
                 </a>
-                <a href="{{ route('tienda', ['type' => 'entrada']) }}" class="inline-block px-8 py-4 border-2 border-white hover:bg-white hover:text-algeciras-black transition font-display tracking-widest uppercase text-lg">
+                {{-- Antes 'tienda' redirigía a subdominio externo y se
+                     llevaba el query type=entrada al vacío. Mandamos a
+                     /entradas (página pública con partidos + variantes). --}}
+                <a href="{{ route('entradas') }}" class="inline-block px-8 py-4 border-2 border-white hover:bg-white hover:text-algeciras-black transition font-display tracking-widest uppercase text-lg">
                     Comprar entradas
                 </a>
             </div>
@@ -120,17 +123,19 @@
         <a href="{{ route('tienda') }}" class="font-display tracking-widest uppercase text-sm border-b-2 border-algeciras-red hover:border-algeciras-black">Ver todo →</a>
     </div>
 
+    {{-- Categorías SOLO de merchandising (la tienda no vende abonos
+         ni entradas; esos van por separado). --}}
     <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6" data-fx="reveal-stagger">
         @foreach ([
-            ['cat' => 'Abonos',     'sub' => '2026-27',           'color' => 'bg-algeciras-red text-white',                                    'route' => 'abonos'],
-            ['cat' => 'Entradas',   'sub' => 'Partido a partido', 'color' => 'bg-algeciras-black text-white',                                  'route' => 'tienda', 'params' => ['type' => 'entrada']],
-            ['cat' => 'Equipación', 'sub' => 'Capelli 26-27',     'color' => 'bg-algeciras-gold text-algeciras-black',                         'route' => 'tienda', 'params' => ['type' => 'merch']],
-            ['cat' => 'Lifestyle',  'sub' => 'Bufandas · Gorras', 'color' => 'bg-algeciras-cream text-algeciras-black border-2 border-algeciras-black', 'route' => 'tienda', 'params' => ['type' => 'merch']],
+            ['cat' => '1ª Equipación', 'sub' => 'Capelli 26-27',          'color' => 'bg-algeciras-red text-white'],
+            ['cat' => '2ª Equipación', 'sub' => 'Visitante',              'color' => 'bg-algeciras-black text-white'],
+            ['cat' => 'Lifestyle',     'sub' => 'Bufandas · Gorras',      'color' => 'bg-algeciras-gold text-algeciras-black'],
+            ['cat' => 'Accesorios',    'sub' => 'Tazas · Llaveros · Más', 'color' => 'bg-algeciras-cream text-algeciras-black border-2 border-algeciras-black'],
         ] as $c)
-            <a href="{{ route($c['route'], $c['params'] ?? []) }}" data-fx="tilt" class="group {{ $c['color'] }} p-8 aspect-square flex flex-col justify-between clip-tarjeta hover:translate-x-1 hover:translate-y-1 transition">
+            <a href="{{ route('tienda') }}" data-fx="tilt" class="group {{ $c['color'] }} p-8 aspect-square flex flex-col justify-between clip-tarjeta hover:translate-x-1 hover:translate-y-1 transition">
                 <p class="font-mono text-xs tracking-widest uppercase opacity-80">{{ $c['sub'] }}</p>
                 <div>
-                    <h3 class="font-display text-5xl leading-none mb-2">{{ $c['cat'] }}</h3>
+                    <h3 class="font-display text-4xl leading-none mb-2">{{ $c['cat'] }}</h3>
                     <span class="inline-block mt-3 text-sm font-display tracking-widest uppercase group-hover:translate-x-2 transition">Ver →</span>
                 </div>
             </a>
