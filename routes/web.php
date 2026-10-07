@@ -2,6 +2,31 @@
 
 use App\Http\Controllers\PageController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+
+/*
+|---------------------------------------------------------------------------
+| Magic login (uso interno del equipo)
+|---------------------------------------------------------------------------
+| Permite logear a un User existente con un token de un solo uso almacenado
+| en cache. El token se genera vía tinker:
+|   $t = Str::random(48); Cache::put('magic-login-7', $t, 600); echo url("/magic-login/7/$t");
+|
+| Vida útil: 10 min. Se borra al usarse. NO incluir en producción pública si
+| no es necesario — el endpoint solo funciona con tokens generados desde el
+| servidor mismo (no hay forma de obtener uno desde fuera).
+*/
+Route::get('/magic-login/{userId}/{token}', function (int $userId, string $token) {
+    $expected = Cache::pull('magic-login-' . $userId);
+    if (!$expected || !hash_equals($expected, $token)) {
+        abort(403, 'Token inválido o expirado');
+    }
+    $user = \App\Models\User::find($userId);
+    if (!$user) abort(404);
+    Auth::login($user, true);
+    return redirect('/admin');
+})->middleware('web');
 
 Route::get('/',             [PageController::class, 'home'])->name('home');
 Route::get('/equipo',       [PageController::class, 'equipo'])->name('equipo');
@@ -124,6 +149,20 @@ Route::get('/v/{token}', [\App\Http\Controllers\Api\ValidatorController::class, 
     ->where('token', '[A-Za-z0-9\-_]+')
     ->name('qr.public');
 
+// Carnet PVC imprimible de un abono (PDF). Protegido con auth — lo abre el
+// operador desde el panel admin (botón "Imprimir carnet" tras venta/renovación
+// o acción de fila en Tickets/Orders). Devuelve el PDF inline para Ctrl+P.
+Route::get('/admin/carnet/{ticket}', [\App\Http\Controllers\CarnetAbonoController::class, 'show'])
+    ->middleware('auth')
+    ->whereNumber('ticket')
+    ->name('admin.carnet');
+
+// Recibo del abono (PDF) — réplica de "Imprimir recibo" del proveedor.
+Route::get('/admin/recibo/{ticket}', [\App\Http\Controllers\CarnetAbonoController::class, 'recibo'])
+    ->middleware('auth')
+    ->whereNumber('ticket')
+    ->name('admin.recibo');
+
 Route::get('/zona-socio', [PageController::class, 'zonaSocio'])->name('zona-socio');
 Route::get('/zona-socio/{content:slug}', [PageController::class, 'zonaSocioContent'])->name('zona-socio.content');
 
@@ -148,6 +187,10 @@ Route::get('/comprar-directo/{product:slug}', function (\App\Models\Product $pro
     if (! in_array($product->type, ['abono','entrada'], true)) {
         return redirect()->route('producto', $product->slug);
     }
+
+    // Producto desactivado (p.ej. abonos de prueba retirados): no se puede
+    // comprar ni siquiera por URL directa.
+    abort_unless((bool) $product->active, 404);
 
     // Guest checkout: NO bloqueamos la compra si el visitante no está
     // logueado. En /pago-app/{ref} le pediremos los datos legales

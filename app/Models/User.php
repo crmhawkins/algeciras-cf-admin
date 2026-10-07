@@ -37,6 +37,12 @@ class User extends Authenticatable implements FilamentUser
         'email',
         'password',
         'role',
+        // 2026-06-03: estas columnas existen en BD desde la migración
+        // 2026_05_26_..._add_auth_fields, pero faltaban en fillable →
+        // $user->update(['profile_image' => …]) se ignoraba silenciosamente.
+        'profile_image',
+        'push_token',
+        'last_login_at',
     ];
 
     /**
@@ -58,7 +64,11 @@ class User extends Authenticatable implements FilamentUser
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed',
+            // 2026-06-03: faltaba este cast → AuthController llamaba a
+            // ->toIso8601String() sobre un string y reventaba el login
+            // entero con un 500. Reproducido y arreglado.
+            'last_login_at'     => 'datetime',
+            'password'          => 'hashed',
         ];
     }
 }

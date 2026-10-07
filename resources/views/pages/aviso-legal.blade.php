@@ -32,6 +32,26 @@
             <td class="py-2"><a href="{{ $c['web'] }}" class="text-algeciras-red">{{ $c['web'] }}</a></td></tr>
     </table>
 
+    <h3 class="font-display uppercase tracking-wide text-algeciras-red mt-8">Comercio que procesa los pagos (TPV Virtual)</h3>
+    <p>La venta de abonos, entradas y servicios la realiza {{ $c['razon_social'] }}. El cobro con
+       tarjeta se procesa de forma segura a través del TPV Virtual de Banco Sabadell (Redsys), cuyo
+       comercio titular es:</p>
+
+    <table class="not-prose w-full text-sm border-collapse my-6">
+        <tr class="border-b"><td class="font-semibold py-2 pr-4 w-1/3">Comercio (pasarela de pago)</td>
+            <td class="py-2">{{ $c['comercio']['razon_social'] }}</td></tr>
+        <tr class="border-b"><td class="font-semibold py-2 pr-4">CIF</td>
+            <td class="py-2">{{ $c['comercio']['cif'] }}</td></tr>
+        <tr class="border-b"><td class="font-semibold py-2 pr-4">Domicilio</td>
+            <td class="py-2">{{ $c['comercio']['direccion'] }}</td></tr>
+        <tr @if(!empty($c['comercio']['telefono'])) class="border-b" @endif><td class="font-semibold py-2 pr-4">Email</td>
+            <td class="py-2"><a href="mailto:{{ $c['comercio']['email'] }}" class="text-algeciras-red">{{ $c['comercio']['email'] }}</a></td></tr>
+        @if(!empty($c['comercio']['telefono']))
+        <tr><td class="font-semibold py-2 pr-4">Teléfono</td>
+            <td class="py-2">{{ $c['comercio']['telefono'] }}</td></tr>
+        @endif
+    </table>
+
     <h2>2. Objeto</h2>
     <p>Este sitio web es propiedad de {{ $c['razon_social'] }} y tiene por objeto facilitar
        información sobre el club y la venta de abonos, entradas y otros servicios relacionados

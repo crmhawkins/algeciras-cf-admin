@@ -66,6 +66,32 @@ class ValidatorController extends Controller
             'gate_id'  => ['nullable', 'string', 'max:32'],
         ]);
 
+        // ---------------- QR ANTIGUO DEL CLUB (legacy_qr) ----------------
+        // El sistema anterior del club emitía un QR con un token plano de 12
+        // chars (sin URL ni firma). Esos carnets PVC ya están impresos y la
+        // app antigua sigue mostrándolos, así que el validador DEBE aceptarlos.
+        // Se intenta SIEMPRE primero: si el escaneo coincide con un legacy_qr
+        // resolvemos el ticket por ahí; si no, caemos al formato propio
+        // (uuid.qr_token firmado) sin tocar su lógica.
+        $legacyTicket = $this->resolveLegacyTicket($data['token']);
+        if ($legacyTicket) {
+            // Construimos un resultado equivalente al de un abono válido para
+            // que el resto del flujo (temporada, pago, attendance) sea idéntico.
+            $r = [
+                'valid'               => true,
+                'type'                => 'abono',
+                'payload_version'     => 'legacy',
+                'ticket_id'           => $legacyTicket->id,
+                'customer_id'         => (int) $legacyTicket->customer_id,
+                'season_id'           => (int) $legacyTicket->season_id,
+                'match_id_from_token' => null,
+            ];
+            $ticket = Ticket::with(['customer', 'product', 'zone', 'match', 'orderItem.order'])
+                ->find($legacyTicket->id);
+
+            return $this->resolveAndRegister($request, $r, $ticket, $data);
+        }
+
         $r = $this->qrService->verifyToken($data['token']);
         if (! $r || ! ($r['valid'] ?? false)) {
             return response()->json([
@@ -78,6 +104,48 @@ class ValidatorController extends Controller
         $ticket = Ticket::with(['customer', 'product', 'zone', 'match', 'orderItem.order'])
             ->find($r['ticket_id']);
 
+        return $this->resolveAndRegister($request, $r, $ticket, $data);
+    }
+
+    /**
+     * Resuelve el Ticket de un QR escaneado por `legacy_qr` (token plano del
+     * sistema antiguo). Devuelve null si el escaneo no es un legacy QR conocido.
+     *
+     * Un mismo abonado renovado tiene su legacy_qr replicado en el ticket de la
+     * temporada anterior Y en el de la actual (mismo token). Priorizamos el de
+     * la temporada actual para que el flujo de validación (que comprueba la
+     * temporada) lo acepte directamente.
+     */
+    private function resolveLegacyTicket(string $scanned): ?Ticket
+    {
+        $scanned = trim($scanned);
+        if ($scanned === '') {
+            return null;
+        }
+
+        $base = Ticket::where('legacy_qr', $scanned);
+        if (! (clone $base)->exists()) {
+            return null;
+        }
+
+        $currentSeasonId = Season::current()?->id;
+
+        // Preferimos el ticket de la temporada actual si existe; si no, el más
+        // reciente con ese legacy_qr.
+        return (clone $base)
+            ->when($currentSeasonId, fn ($q) => $q->orderByRaw('season_id = ? DESC', [$currentSeasonId]))
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * Tramo común tras resolver el ticket (legacy o propio): comprueba que
+     * exista, esté pagado, no cancelado, y aplica la lógica de abono/entrada.
+     * Centraliza lo que antes vivía inline en `validate()` para reutilizarlo
+     * en ambos caminos sin duplicar reglas de seguridad.
+     */
+    private function resolveAndRegister(Request $request, array $r, ?Ticket $ticket, array $data): JsonResponse
+    {
         if (! $ticket) {
             return response()->json([
                 'valid'   => false,
@@ -241,6 +309,57 @@ class ValidatorController extends Controller
      * El admin del CRM también puede consultar estas stats (admin emite
      * tokens con el mismo scope via OperatorAuthController).
      */
+    /**
+     * Devuelve los próximos partidos (los últimos 14 días + futuros) para
+     * que el operador elija sobre cuál está validando QRs.
+     * Auth: scope:operator (mismo que validate).
+     */
+    public function upcomingMatches(Request $request): JsonResponse
+    {
+        if ($deny = $this->ensureOperatorScope($request)) {
+            return $deny;
+        }
+
+        // Ventana razonable: -3 días (re-validaciones post-partido) hasta
+        // +120 días (todo el calendario relevante: pretemporada + 4 meses).
+        // Si la BD aún no tiene partidos en ese rango (caso pre-temporada),
+        // devolvemos los próximos 20 partidos futuros para que el operador
+        // pueda elegir algo siempre.
+        $desde = now()->subDays(3);
+        $hasta = now()->addDays(120);
+
+        $q = FootballMatch::whereBetween('kickoff_at', [$desde, $hasta])
+            ->orderBy('kickoff_at')
+            ->limit(20)
+            ->get();
+
+        if ($q->isEmpty()) {
+            $q = FootballMatch::where('kickoff_at', '>=', now()->subYear())
+                ->orderBy('kickoff_at')
+                ->limit(20)
+                ->get();
+        }
+
+        $partidos = $q
+            ->map(fn ($m) => [
+                'id'         => $m->id,
+                'matchday'   => $m->matchday,
+                'opponent'   => $m->opponent,
+                'home'       => (bool) ($m->home ?? false),
+                'kickoff_at' => $m->kickoff_at?->toIso8601String(),
+                'label'      => sprintf(
+                    'J%s · %s%s',
+                    $m->matchday ?? '?',
+                    $m->opponent ?? '?',
+                    $m->kickoff_at ? ' · '.$m->kickoff_at->format('d/m H:i') : ''
+                ),
+            ]);
+
+        return response()->json([
+            'matches' => $partidos,
+        ]);
+    }
+
     public function matchStats(Request $request, FootballMatch $match): JsonResponse
     {
         if ($deny = $this->ensureOperatorScope($request)) {
@@ -321,18 +440,48 @@ class ValidatorController extends Controller
             default   => $product?->type ?? null,
         };
 
+        // Foto del socio para que el operador la vea en el resultado:
+        // el modelo Customer cuelga del User a través de user_id, y el
+        // campo se llama `profile_image` (path relativo en storage/public).
+        // Devolvemos URL absoluta lista para <Image source={{uri}}> en RN.
+        $photoUrl = null;
+        $rawPhoto = $customer?->user?->profile_image;
+        if (is_string($rawPhoto) && $rawPhoto !== '') {
+            if (preg_match('#^https?://#i', $rawPhoto)) {
+                $photoUrl = $rawPhoto;
+            } else {
+                $photoUrl = asset('storage/'.ltrim($rawPhoto, '/'));
+            }
+        }
+
+        // Tier (aficionado / abonado / abonado_vip / peñista) para que el
+        // operador vea de un vistazo si es socio "premium".
+        $tierLabel = null;
+        $tier      = $customer?->tier ?? null;
+        if ($tier) {
+            $tierLabel = match ($tier) {
+                'abonado_vip' => 'Abonado VIP',
+                'abonado'     => 'Abonado',
+                'peñista', 'penista' => 'Peñista',
+                'aficionado'  => 'Aficionado',
+                default       => ucfirst((string) $tier),
+            };
+        }
+
         return [
-            'id'            => $ticket->id,
-            'customer_name' => $customer
+            'id'                 => $ticket->id,
+            'customer_name'      => $customer
                 ? trim(($customer->first_name ?? '').' '.($customer->last_name ?? ''))
                 : ($ticket->holder_name ?? null),
-            'holder_dni'    => $ticket->holder_dni,
-            'zone'          => $zone ? ['name' => $zone->name] : null,
-            'fila'          => $fila,
-            'asiento'       => $asiento,
-            'match_label'   => $matchLabel,
-            'type_label'    => $typeLabel,
-            'season_name'   => $season?->name,
+            'customer_photo_url' => $photoUrl,
+            'tier_label'         => $tierLabel,
+            'holder_dni'         => $ticket->holder_dni,
+            'zone'               => $zone ? ['name' => $zone->name] : null,
+            'fila'               => $fila,
+            'asiento'            => $asiento,
+            'match_label'        => $matchLabel,
+            'type_label'         => $typeLabel,
+            'season_name'        => $season?->name,
         ];
     }
 }

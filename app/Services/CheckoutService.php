@@ -7,8 +7,11 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Ticket;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -143,6 +146,14 @@ class CheckoutService
 
             $this->generateTicketsForOrder($order);
 
+            // Consumir el cupón aplicado (control de un-solo-uso / stock).
+            // markOrderPaid es idempotente, así que este incremento ocurre
+            // exactamente una vez por pedido pagado. Sin esto, un cupón con
+            // total_stock=1 nunca llegaba a agotarse en el flujo por código.
+            if ($order->coupon_id) {
+                Coupon::whereKey($order->coupon_id)->increment('used_count');
+            }
+
             Log::info('Order pagada', [
                 'order_id'  => $order->id,
                 'reference' => $order->reference,
@@ -152,7 +163,15 @@ class CheckoutService
 
             $fresh = $order->load('items.product', 'tickets', 'customer');
 
-            $this->sendOrderConfirmationEmail($fresh);
+            // Asegurar que el cliente tiene cuenta de app con credenciales.
+            // Devuelve la contraseña EN CLARO solo si se ha generado una nueva
+            // (cuenta nueva o reseteada). Se pasa al email para que el cliente
+            // pueda entrar en la app. Nunca se loguea ni se persiste en claro.
+            $appPassword = $fresh->customer
+                ? $this->ensureAppCredentials($fresh->customer)
+                : null;
+
+            $this->sendOrderConfirmationEmail($fresh, $appPassword);
 
             return $fresh;
         });
@@ -168,9 +187,28 @@ class CheckoutService
      * sera no-op y se usara la config persistida.
      *
      * Best-effort: si falla solo se loguea, NO rompe la compra.
+     *
+     * @param ?string $appPassword Contraseña EN CLARO de la cuenta de la app
+     *                             del cliente (solo si se acaba de generar).
+     *                             Se incluye en el email para el primer acceso.
+     *                             Nunca se loguea.
      */
-    public function sendOrderConfirmationEmail(Order $order): void
+    public function sendOrderConfirmationEmail(Order $order, ?string $appPassword = null): void
     {
+        // ─────────────────────────────────────────────────────────────────
+        // KILL SWITCH DE CORREO — TEMPORAL. Mientras se migra la BD de
+        // abonados NO se envía ningún email a nadie. Este método tiene
+        // credenciales SMTP reales, así que se corta aquí ANTES de conectar.
+        // Reactivar: MAIL_KILL_SWITCH=false en Coolify (ver AppServiceProvider).
+        // ─────────────────────────────────────────────────────────────────
+        if (filter_var(env('MAIL_KILL_SWITCH', true), FILTER_VALIDATE_BOOLEAN)) {
+            \Log::info('[MAIL KILL SWITCH] Email de confirmación NO enviado (correo desactivado).', [
+                'order'    => $order->id,
+                'customer' => $order->customer?->email ?: $order->guest_email,
+            ]);
+            return;
+        }
+
         try {
             $to = $order->customer?->email ?: $order->guest_email;
             if (!$to) { return; }
@@ -221,9 +259,19 @@ class CheckoutService
                 }
             }
 
+            // URLs de descarga de la app (placeholders si no hay reales).
+            $appStoreUrl = (string) (config('club.app_store_url')   ?? 'https://apps.apple.com/app/algeciras-cf');
+            $playStoreUrl = (string) (config('club.play_store_url') ?? 'https://play.google.com/store/apps/details?id=com.algecirascf.app');
+
             \Illuminate\Support\Facades\Mail::send(
                 'emails.order-confirmation',
-                ['order' => $order],
+                [
+                    'order'        => $order,
+                    'appEmail'     => $to,
+                    'appPassword'  => $appPassword,
+                    'appStoreUrl'  => $appStoreUrl,
+                    'playStoreUrl' => $playStoreUrl,
+                ],
                 function ($m) use ($to, $order, $attachments) {
                     $m->to($to)
                       ->subject('Algeciras CF · Confirmación de tu compra ' . $order->reference);
@@ -251,6 +299,94 @@ class CheckoutService
                 'err'   => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Garantiza que el Customer tiene una cuenta de la app (User vinculado)
+     * con credenciales utilizables, y devuelve la contraseña EN CLARO recién
+     * generada para incluirla en el email de confirmación.
+     *
+     * Casos:
+     *   - Customer SIN user_id (abonado importado, alta de taquilla): crea un
+     *     User nuevo con contraseña generada, lo vincula (customer.user_id) y
+     *     devuelve la contraseña en claro.
+     *   - Customer CON user_id pero el User no tiene contraseña usable
+     *     (importados sin password): resetea con una contraseña nueva y la
+     *     devuelve.
+     *   - Customer con cuenta ya operativa: NO toca nada y devuelve null
+     *     (no exponemos ni reseteamos la contraseña de quien ya entra a la app).
+     *
+     * La contraseña en claro solo vive en memoria; se hashea con Hash::make()
+     * antes de persistirla y NUNCA se escribe en logs.
+     *
+     * Público: lo llama también CobroManual (taquilla) para asegurar las
+     * credenciales del abonado antes de enviar el email.
+     */
+    public function ensureAppCredentials(Customer $customer): ?string
+    {
+        try {
+            $email = $customer->email;
+            if (!$email) {
+                return null;
+            }
+
+            // 1) ¿Ya tiene User vinculado y con contraseña? -> no tocar.
+            $user = $customer->user_id ? User::find($customer->user_id) : null;
+
+            // Fallback: buscar User por email (puede existir sin estar vinculado).
+            if (!$user) {
+                $user = User::where('email', $email)->first();
+            }
+
+            if ($user) {
+                // Si el User ya tiene contraseña, lo dejamos como está: el cliente
+                // ya tiene acceso y no reseteamos su clave por una compra.
+                if (!empty($user->getAttribute('password'))) {
+                    // Asegurar el vínculo customer->user por si faltaba.
+                    if (!$customer->user_id) {
+                        $customer->forceFill(['user_id' => $user->id])->save();
+                    }
+                    return null;
+                }
+
+                // User existente SIN contraseña (importado): asignar una nueva.
+                $plain = $this->generarPasswordLegible();
+                $user->forceFill(['password' => Hash::make($plain)])->save();
+                if (!$customer->user_id) {
+                    $customer->forceFill(['user_id' => $user->id])->save();
+                }
+                return $plain;
+            }
+
+            // 2) No existe User: crear uno nuevo con contraseña generada.
+            $plain = $this->generarPasswordLegible();
+            $user = User::create([
+                'name'     => trim(($customer->first_name ?? '') . ' ' . ($customer->last_name ?? '')) ?: $email,
+                'email'    => $email,
+                'password' => Hash::make($plain),
+            ]);
+
+            $customer->forceFill(['user_id' => $user->id])->save();
+
+            return $plain;
+        } catch (\Throwable $e) {
+            // Nunca rompemos la compra por las credenciales; el email irá sin
+            // bloque de acceso (la vista lo omite con @if).
+            Log::warning('No se pudieron generar credenciales de app', [
+                'customer' => $customer->id ?? null,
+                'err'      => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Genera una contraseña legible (sin caracteres ambiguos) de 10 chars.
+     * Pensada para escribir a mano en la app desde el email.
+     */
+    protected function generarPasswordLegible(): string
+    {
+        return Str::password(10, letters: true, numbers: true, symbols: false, spaces: false);
     }
 
     /**
@@ -352,6 +488,21 @@ class CheckoutService
                     'status'        => 'issued',
                 ]);
                 $this->qrService->generate($ticket);
+
+                // QR unificado para ABONOS: código corto de 12 chars en
+                // legacy_qr (misma forma/densidad que los carnets legacy del
+                // club → imprimible y escaneable en PVC, y legible por el
+                // futuro lector móvil que consulta la BD). Renovación: reutiliza
+                // el código del abonado; alta nueva: genera uno único.
+                if ($item->product_type === 'abono') {
+                    $code = Ticket::where('customer_id', $order->customer_id)
+                        ->whereNotNull('legacy_qr')->where('legacy_qr', '!=', '')
+                        ->where('id', '!=', $ticket->id)->value('legacy_qr');
+                    if (! $code) {
+                        do { $code = Str::random(12); } while (Ticket::where('legacy_qr', $code)->exists());
+                    }
+                    $ticket->update(['legacy_qr' => $code]);
+                }
             }
 
             if ($item->product && $toCreate > 0) {

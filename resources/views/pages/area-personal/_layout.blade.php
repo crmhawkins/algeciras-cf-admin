@@ -35,26 +35,24 @@
 
     $socioNumero = $customer?->socio_number ?: str_pad((string) ($user->id ?? 0), 6, '0', STR_PAD_LEFT);
 
-    // Payload del QR del carnet — uuid (socio_number) + hash auth (no se firma con app key aquí
-    // para mantenerlo simple; el QR real lo genera la API)
-    $qrPayload = "ACF:".$socioNumero.":".substr(sha1((string) $user->id . $user->email), 0, 12);
-
-    // Generar QR con endroid si está disponible, si no SVG placeholder
-    try {
-        if (class_exists(\Endroid\QrCode\Builder\Builder::class)) {
-            $qrResult = \Endroid\QrCode\Builder\Builder::create()
-                ->writer(new \Endroid\QrCode\Writer\SvgWriter())
-                ->data($qrPayload)
-                ->size(220)
-                ->margin(0)
-                ->build();
-            $qrSvg = $qrResult->getString();
-        } else {
-            $qrSvg = null;
-        }
-    } catch (\Throwable $e) {
-        $qrSvg = null;
+    // Igual que en carnet.blade.php: el QR mini de la sidebar usa el PNG
+    // REAL del primer abono activo del socio (estático toda la temporada).
+    $abonoTicketMini = $customer
+        ? \App\Models\Ticket::where('customer_id', $customer->id)
+            ->where('status', 'issued')
+            ->whereHas('product', fn ($q) => $q->where('type', 'abono'))
+            ->orderByDesc('id')
+            ->first()
+        : null;
+    if ($abonoTicketMini && empty($abonoTicketMini->qr_image_path)) {
+        try {
+            app(\App\Services\QrService::class)->generate($abonoTicketMini);
+            $abonoTicketMini->refresh();
+        } catch (\Throwable $e) { /* silent */ }
     }
+    $qrUrlMini = $abonoTicketMini?->qr_image_path
+        ? \Illuminate\Support\Facades\Storage::url($abonoTicketMini->qr_image_path)
+        : null;
 
     // Items del nav
     $navItems = [
@@ -137,10 +135,10 @@
                                       style="{{ $tierBadgeStyle }}">
                                     {{ $tierLabel }}
                                 </span>
-                                {{-- QR pequeño --}}
+                                {{-- QR pequeño — PNG real del abono si lo hay --}}
                                 <div class="bg-white p-1" style="width:42px;height:42px;">
-                                    @if($qrSvg)
-                                        <div style="width:34px;height:34px;">{!! preg_replace('/width="[^"]*"\s*height="[^"]*"/', 'width="34" height="34"', $qrSvg) !!}</div>
+                                    @if($qrUrlMini)
+                                        <img src="{{ $qrUrlMini }}" alt="QR" style="width:34px;height:34px;object-fit:contain;">
                                     @else
                                         {{-- SVG placeholder simulando QR --}}
                                         <svg viewBox="0 0 21 21" style="width:34px;height:34px;" xmlns="http://www.w3.org/2000/svg" fill="#000">

@@ -24,6 +24,14 @@
     <div class="container mx-auto px-4 lg:px-8 grid lg:grid-cols-2 gap-12 lg:gap-20 items-start">
 
         {{-- COLUMNA IZQUIERDA: Tabs Login / Registro --}}
+        <div class="space-y-4">
+        @if (session('status'))
+            {{-- Mensaje cuando el usuario intentó comprar sin estar logueado y
+                 lo redirigimos aquí. --}}
+            <div class="bg-algeciras-red text-white p-4 font-display tracking-wider uppercase text-sm shadow-brutal">
+                {{ session('status') }}
+            </div>
+        @endif
         <div x-data="{ tab: '{{ session('register_attempted') || ($errors->any() && old('name')) ? 'register' : 'login' }}' }"
              class="bg-white border-2 border-algeciras-black/10 shadow-brutal p-8 lg:p-10" data-fx="reveal">
 
@@ -99,8 +107,8 @@
                                placeholder="Ivan">
                     </div>
                     <div>
-                        <label class="block font-display tracking-widest uppercase text-xs mb-2">Apellidos</label>
-                        <input type="text" name="last_name" value="{{ old('last_name') }}"
+                        <label class="block font-display tracking-widest uppercase text-xs mb-2">Apellidos *</label>
+                        <input type="text" name="last_name" required value="{{ old('last_name') }}"
                                autocomplete="family-name"
                                class="w-full px-4 py-3 border-2 border-algeciras-black/10 focus:border-algeciras-red focus:outline-none transition font-mono"
                                placeholder="García López">
@@ -117,20 +125,65 @@
 
                 <div class="grid sm:grid-cols-2 gap-4">
                     <div>
-                        <label class="block font-display tracking-widest uppercase text-xs mb-2">Teléfono</label>
+                        <label class="block font-display tracking-widest uppercase text-xs mb-2">Teléfono *</label>
                         <div class="flex">
                             <span class="px-3 py-3 border-2 border-r-0 border-algeciras-black/10 bg-algeciras-cream font-mono text-sm">🇪🇸 +34</span>
-                            <input type="tel" name="phone" value="{{ old('phone') }}"
+                            <input type="tel" name="phone" required value="{{ old('phone') }}"
                                    autocomplete="tel-national"
+                                   pattern="[0-9 ]{9,}"
                                    class="flex-1 px-4 py-3 border-2 border-algeciras-black/10 focus:border-algeciras-red focus:outline-none transition font-mono"
                                    placeholder="600 000 000">
                         </div>
                     </div>
                     <div>
-                        <label class="block font-display tracking-widest uppercase text-xs mb-2">DNI / NIE</label>
-                        <input type="text" name="dni" value="{{ old('dni') }}"
+                        <label class="block font-display tracking-widest uppercase text-xs mb-2">DNI / NIE *</label>
+                        <input type="text" name="dni" required value="{{ old('dni') }}"
+                               pattern="[0-9XYZxyz][0-9]{7}[A-Za-z]|[XYZxyz][0-9]{7}[A-Za-z]"
                                class="w-full px-4 py-3 border-2 border-algeciras-black/10 focus:border-algeciras-red focus:outline-none transition font-mono uppercase"
                                placeholder="12345678X">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-display tracking-widest uppercase text-xs mb-2">Fecha de nacimiento *</label>
+                    <input type="date" name="birth_date" required value="{{ old('birth_date') }}"
+                           autocomplete="bday"
+                           max="{{ now()->subYears(14)->format('Y-m-d') }}"
+                           min="{{ now()->subYears(110)->format('Y-m-d') }}"
+                           class="w-full px-4 py-3 border-2 border-algeciras-black/10 focus:border-algeciras-red focus:outline-none transition font-mono">
+                    <p class="text-xs text-algeciras-gray mt-1">Necesario para el carnet. Debes ser mayor de 14 años.</p>
+                </div>
+
+                <div>
+                    <label class="block font-display tracking-widest uppercase text-xs mb-2">Dirección *</label>
+                    <input type="text" name="address" required value="{{ old('address') }}"
+                           autocomplete="street-address"
+                           class="w-full px-4 py-3 border-2 border-algeciras-black/10 focus:border-algeciras-red focus:outline-none transition font-mono"
+                           placeholder="Calle Real 123, 4ºB">
+                </div>
+
+                <div class="grid sm:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block font-display tracking-widest uppercase text-xs mb-2">CP *</label>
+                        <input type="text" name="postal_code" required value="{{ old('postal_code') }}"
+                               autocomplete="postal-code"
+                               pattern="[0-9]{5}"
+                               class="w-full px-4 py-3 border-2 border-algeciras-black/10 focus:border-algeciras-red focus:outline-none transition font-mono"
+                               placeholder="11201">
+                    </div>
+                    <div>
+                        <label class="block font-display tracking-widest uppercase text-xs mb-2">Ciudad *</label>
+                        <input type="text" name="city" required value="{{ old('city') }}"
+                               autocomplete="address-level2"
+                               class="w-full px-4 py-3 border-2 border-algeciras-black/10 focus:border-algeciras-red focus:outline-none transition font-mono"
+                               placeholder="Algeciras">
+                    </div>
+                    <div>
+                        <label class="block font-display tracking-widest uppercase text-xs mb-2">Provincia</label>
+                        <input type="text" name="province" value="{{ old('province', 'Cádiz') }}"
+                               autocomplete="address-level1"
+                               class="w-full px-4 py-3 border-2 border-algeciras-black/10 focus:border-algeciras-red focus:outline-none transition font-mono"
+                               placeholder="Cádiz">
                     </div>
                 </div>
 
@@ -172,6 +225,7 @@
                 </p>
             </form>
         </div>
+        </div>{{-- /space-y-4 wrapper login col --}}
 
         {{-- COLUMNA DERECHA: Qué podrás hacer --}}
         <div class="space-y-6" data-fx="reveal-stagger">

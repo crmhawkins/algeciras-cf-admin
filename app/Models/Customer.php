@@ -40,8 +40,23 @@ class Customer extends Model
     public function matchAttendances()       { return $this->hasMany(MatchAttendance::class); }
     public function mvpVotes()               { return $this->hasMany(MvpVote::class); }
 
+    public function sanciones()              { return $this->hasMany(Sancion::class); }
+
     // Scopes
     public function scopeSocios($q) { return $q->where('is_socio', true); }
+
+    /**
+     * Ticket de abono de la temporada actual (el del carnet). Si no hay de la
+     * temporada actual, devuelve el más reciente. Usado por las acciones del
+     * módulo Abonados (descargar carnet, recibo, liberar asiento).
+     */
+    public function currentAbonoTicket(): ?Ticket
+    {
+        $sid = Season::current()?->id ?? Season::max('id');
+
+        return $this->tickets()->where('season_id', $sid)->latest('id')->first()
+            ?? $this->tickets()->latest('id')->first();
+    }
 
     // Accessors
     public function getFullNameAttribute(): string

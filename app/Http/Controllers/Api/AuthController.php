@@ -69,31 +69,55 @@ class AuthController extends Controller
     /** POST /api/user/create — registro */
     public function register(Request $request)
     {
-        // Aceptamos tanto keys EN (name, last_name, phone) como ES (nombre,
-        // apellidos, telefono, dni) — la app móvil envía las ES, la web las EN.
-        // Normalizamos antes de validar para que `validate()` tenga keys EN.
+        // Aceptamos tanto keys EN (name, last_name, phone, address) como ES
+        // (nombre, apellidos, telefono, dni, fecha_nacimiento, direccion,
+        // codigo_postal, ciudad, provincia) — la app móvil envía las ES,
+        // la web las EN. Normalizamos antes de validar.
         $request->merge([
-            'name'       => $request->input('name', $request->input('nombre')),
-            'last_name'  => $request->input('last_name', $request->input('apellidos')),
-            'phone'      => $request->input('phone', $request->input('telefono')),
-            'dni'        => $request->input('dni'),
+            'name'        => $request->input('name', $request->input('nombre')),
+            'last_name'   => $request->input('last_name', $request->input('apellidos')),
+            'phone'       => $request->input('phone', $request->input('telefono')),
+            'dni'         => $request->input('dni'),
+            'birth_date'  => $request->input('birth_date', $request->input('fecha_nacimiento')),
+            'address'     => $request->input('address', $request->input('direccion')),
+            'city'        => $request->input('city', $request->input('ciudad')),
+            'postal_code' => $request->input('postal_code', $request->input('codigo_postal')),
+            'province'    => $request->input('province', $request->input('provincia')),
         ]);
 
+        // Registro obligatorio completo (regla cliente 2026-06-02):
+        // nombre + apellidos + email + tel + DNI + fecha nacimiento + dirección
         $data = $request->validate([
-            'name'       => 'required|string|max:120',
-            'email'      => 'required|email|unique:users,email',
-            'password'   => 'required|string|min:6',
-            'first_name' => 'nullable|string|max:80',
-            'last_name'  => 'nullable|string|max:80',
-            'phone'      => 'nullable|string|max:32',
-            'dni'        => 'nullable|string|max:24|unique:customers,dni',
+            'name'        => 'required|string|max:120',
+            'email'       => 'required|email|unique:users,email',
+            'password'    => 'required|string|min:6',
+            'first_name'  => 'nullable|string|max:80',
+            'last_name'   => 'required|string|max:80',
+            'phone'       => 'required|string|min:9|max:32',
+            'dni'         => 'required|string|max:24|unique:customers,dni',
+            'birth_date'  => ['required', 'date', 'before:'.now()->subYears(14)->format('Y-m-d'), 'after:'.now()->subYears(110)->format('Y-m-d')],
+            'address'     => 'required|string|max:255',
+            'city'        => 'required|string|max:120',
+            'postal_code' => 'required|string|regex:/^[0-9]{5}$/',
+            'province'    => 'nullable|string|max:120',
         ], [
-            'email.unique'    => 'Ya existe una cuenta con este email. Inicia sesión o recupera tu contraseña.',
-            'dni.unique'      => 'Ya existe una cuenta con este DNI. Si crees que es un error, contacta con el club.',
-            'password.min'    => 'La contraseña debe tener al menos 6 caracteres.',
-            'name.required'   => 'Tu nombre es obligatorio.',
-            'email.required'  => 'Tu email es obligatorio.',
-            'email.email'     => 'El email no parece válido.',
+            'email.unique'        => 'Ya existe una cuenta con este email. Inicia sesión o recupera tu contraseña.',
+            'dni.unique'          => 'Ya existe una cuenta con este DNI. Si crees que es un error, contacta con el club.',
+            'dni.required'        => 'El DNI es obligatorio.',
+            'phone.required'      => 'El teléfono es obligatorio.',
+            'phone.min'           => 'El teléfono no es válido.',
+            'birth_date.required' => 'La fecha de nacimiento es obligatoria.',
+            'birth_date.before'   => 'Debes ser mayor de 14 años.',
+            'birth_date.after'    => 'Fecha de nacimiento no válida.',
+            'address.required'    => 'La dirección es obligatoria.',
+            'city.required'       => 'La ciudad es obligatoria.',
+            'postal_code.required'=> 'El código postal es obligatorio.',
+            'postal_code.regex'   => 'El código postal debe tener 5 dígitos.',
+            'last_name.required'  => 'Los apellidos son obligatorios.',
+            'password.min'        => 'La contraseña debe tener al menos 6 caracteres.',
+            'name.required'       => 'Tu nombre es obligatorio.',
+            'email.required'      => 'Tu email es obligatorio.',
+            'email.email'         => 'El email no parece válido.',
         ]);
 
         $user = User::create([
@@ -103,12 +127,18 @@ class AuthController extends Controller
         ]);
 
         Customer::create([
-            'user_id'    => $user->id,
-            'email'      => $data['email'],
-            'first_name' => $data['first_name'] ?? $data['name'],
-            'last_name'  => $data['last_name']  ?? '',
-            'phone'      => $data['phone']      ?? null,
-            'dni'        => $data['dni']        ?? null,
+            'user_id'     => $user->id,
+            'email'       => $data['email'],
+            'first_name'  => $data['first_name'] ?? $data['name'],
+            'last_name'   => $data['last_name'],
+            'phone'       => $data['phone'],
+            'dni'         => $data['dni'],
+            'birth_date'  => $data['birth_date'],
+            'address'     => $data['address'],
+            'city'        => $data['city'],
+            'postal_code' => $data['postal_code'],
+            'province'    => $data['province'] ?? 'Cádiz',
+            'country'     => 'ES',
         ]);
 
         $token = $user->createToken('app-registro')->plainTextToken;
@@ -119,19 +149,33 @@ class AuthController extends Controller
         ], 201);
     }
 
-    /** POST /api/authenticate/recuperar-password — envía email de reset */
+    /** POST /api/authenticate/recuperar-password — envía email de reset.
+     *
+     * NOTA: por seguridad SIEMPRE devolvemos 200 con el mismo mensaje, sin
+     * revelar si el email existe o no. Si SMTP falla (caso común en este
+     * proyecto hasta que el club active credenciales correctas) tampoco
+     * propagamos error — el usuario ve "te enviaremos un enlace" y dejamos
+     * la incidencia en logs para revisar a posteriori.
+     */
     public function recuperarPassword(Request $request)
     {
         $data = $request->validate([
             'email' => 'required|email',
         ]);
 
-        // Laravel built-in password reset broker
-        $status = Password::sendResetLink(['email' => $data['email']]);
+        try {
+            Password::sendResetLink(['email' => $data['email']]);
+        } catch (\Throwable $e) {
+            // No reventamos al cliente — el email no salió pero por
+            // seguridad le decimos lo mismo. Equipo técnico revisa logs.
+            \Log::warning('Password reset SMTP fail', [
+                'email' => $data['email'],
+                'err'   => $e->getMessage(),
+            ]);
+        }
 
-        // Por seguridad siempre devolvemos 200 (no revelamos si el email existe)
         return response()->json([
-            'ok'      => $status === Password::RESET_LINK_SENT,
+            'ok'      => true,
             'message' => 'Si el email existe en nuestros registros, recibirás un enlace de recuperación en unos minutos.',
         ]);
     }
@@ -301,7 +345,9 @@ class AuthController extends Controller
             'profileImage' => $user->profile_image ? Storage::disk('public')->url($user->profile_image) : null,
             'isSocio'      => (bool) ($customer?->is_socio ?? false),
             'socioNumber'  => $customer?->socio_number,
-            'lastLoginAt'  => $user->last_login_at?->toIso8601String(),
+            'lastLoginAt'  => $user->last_login_at instanceof \Carbon\CarbonInterface
+                ? $user->last_login_at->toIso8601String()
+                : ($user->last_login_at ? (string) $user->last_login_at : null),
             'tier'         => $customer?->tier ?? 'aficionado',
             'tierLabel'    => $customer?->tier_label ?? 'Aficionado',
             'counts'       => $counts,

@@ -123,6 +123,12 @@ class TicketsTable
             ->recordActions([
                 ViewAction::make()->label('Ver'),
                 EditAction::make()->label('Editar'),
+                Action::make('imprimir_carnet')
+                    ->label('Imprimir carnet')
+                    ->icon('heroicon-o-identification')
+                    ->color('primary')
+                    ->url(fn (Ticket $record): string => route('admin.carnet', ['ticket' => $record->id]))
+                    ->openUrlInNewTab(),
                 Action::make('regenerate_qr')
                     ->label('Regenerar QR')
                     ->icon('heroicon-o-qr-code')

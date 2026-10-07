@@ -326,6 +326,77 @@ class PublicController extends Controller
      * fue migrada, devolvemos el array hardcodeado (final 2025/26) como
      * fallback para que la app siempre tenga datos.
      */
+    /**
+     * GET /api/partidos/proximos
+     *
+     * Devuelve los próximos partidos en casa con el slug del Product type=entrada
+     * asociado para que el selector "Entradas" de la app pueda redirigir
+     * directo a /comprar-directo/{slug}. Si un partido aún no tiene producto
+     * de entrada generado, se devuelve sin slug y el frontend muestra
+     * "Pendiente de salida a la venta".
+     */
+    public function partidosProximosConEntrada(): JsonResponse
+    {
+        $partidos = FootballMatch::query()
+            ->where('kickoff_at', '>=', now()->subHours(2))
+            ->orderBy('kickoff_at')
+            ->limit(20)
+            ->get();
+
+        // Si NO existe Product type=entrada vinculado a un partido concreto,
+        // usamos como fallback los productos type=entrada genéricos
+        // (match_id=null) que el club ha cargado para reventa puntual.
+        // Esto evita que la lista aparezca vacía hasta que el club genere
+        // un Product por partido.
+        $genericos = \App\Models\Product::query()
+            ->where('type', 'entrada')
+            ->whereNull('match_id')
+            ->where('active', true)
+            ->orderBy('sort_order')
+            ->get(['id','slug','name','price','vat_rate']);
+
+        $items = $partidos->map(function (FootballMatch $m) use ($genericos) {
+            // Buscamos el Product type=entrada vinculado a este match.
+            // Si hay varios productos por partido (general/socios/joven),
+            // devolvemos todos como variantes seleccionables.
+            $productos = \App\Models\Product::query()
+                ->where('type', 'entrada')
+                ->where('match_id', $m->id)
+                ->where('active', true)
+                ->orderBy('sort_order')
+                ->get(['id','slug','name','price','vat_rate']);
+
+            // Fallback: si el partido no tiene productos específicos, ofrecemos
+            // las entradas genéricas para que el aficionado pueda comprar igual.
+            if ($productos->isEmpty()) {
+                $productos = $genericos;
+            }
+
+            return [
+                'id'         => $m->id,
+                'matchday'   => $m->matchday,
+                'opponent'   => $m->opponent,
+                'home'       => (bool) ($m->home ?? false),
+                'kickoff_at' => $m->kickoff_at?->toIso8601String(),
+                'fecha'      => $m->kickoff_at?->format('d/m/Y'),
+                'hora'       => $m->kickoff_at?->format('H:i'),
+                'label'      => sprintf(
+                    '%s%s',
+                    $m->matchday ? 'J'.$m->matchday.' · ' : '',
+                    $m->opponent ?? '?'
+                ),
+                'entradas'   => $productos->map(fn ($p) => [
+                    'id'    => $p->id,
+                    'slug'  => $p->slug,
+                    'nombre'=> is_array($p->name) ? ($p->name['es'] ?? array_values($p->name)[0]) : $p->name,
+                    'precio'=> (float) $p->price,
+                ])->values(),
+            ];
+        });
+
+        return response()->json(['partidos' => $items->values()]);
+    }
+
     public function clasificacion(): JsonResponse
     {
         // Si existe la tabla, leer de BD; si no, fallback hardcodeado.

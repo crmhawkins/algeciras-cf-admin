@@ -75,19 +75,106 @@ class CobroManual extends Page implements HasForms
     /** Métodos de pago permitidos. Si null, se ofrecen los 4 (efectivo/bizum/transferencia/tpv). */
     public ?array $metodosPagoPermitidos = null;
 
+    /** Abono resuelto automáticamente (flujo alta/renovación): ['id','name','price']. */
+    public ?array $autoAbono = null;
+
+    /** sector.zone (string interno) -> zone_id del producto de abono. */
+    protected function zoneIdFromSectorZone(?string $z): ?int
+    {
+        if (!$z) return null;
+        return match (true) {
+            str_contains($z, 'tribuna')   => 1,
+            str_contains($z, 'preferent') => 2,
+            str_contains($z, 'fondo')     => 3,
+            str_contains($z, 'palco')     => 5,
+            default                       => 3,
+        };
+    }
+
+    /**
+     * Resuelve el producto de abono automáticamente según la zona del asiento
+     * (o, en su defecto, la del último ticket del cliente) + la variante
+     * (nuevo / renovación) y la temporada actual. Así el operador no tiene que
+     * elegir producto ni precio en los flujos de abono.
+     */
+    protected function resolverAbonoAuto(?int $seatId, ?int $customerId): ?Product
+    {
+        if ($this->tipoProductoFiltro !== 'abono' || !$this->varianteProductoFiltro) {
+            return null;
+        }
+
+        $zoneId = null;
+        if ($seatId) {
+            $seat = Seat::with('sector')->find($seatId);
+            $zoneId = $this->zoneIdFromSectorZone($seat?->sector?->zone);
+        }
+        if (!$zoneId && $customerId) {
+            $zoneId = Ticket::where('customer_id', $customerId)
+                ->whereNotNull('zone_id')->orderByDesc('id')->value('zone_id');
+        }
+        if (!$zoneId) {
+            return null;
+        }
+
+        $seasonId = \App\Models\Season::current()?->id;
+        $kw = $this->varianteProductoFiltro === 'renovacion' ? '%enov%' : '%uevo%';
+
+        return Product::where('type', 'abono')->where('season_id', $seasonId)->where('zone_id', $zoneId)
+            ->where('name', 'like', $kw)->first()
+            ?? Product::where('type', 'abono')->where('season_id', $seasonId)->where('zone_id', $zoneId)->first();
+    }
+
     public function mount(): void
     {
-        // Leemos query params para atajos del escritorio:
-        //   ?modo=nuevo|existente   → pre-selecciona modo cliente
-        //   ?tipo=abono|entrada|merch → filtra el dropdown de productos
-        $modoParam = request()->query('modo');
-        $tipoParam = request()->query('tipo');
+        // Query params soportados (vienen de VentaAbonos y atajos):
+        //   ?modo=nuevo|existente        → pre-selecciona modo cliente
+        //   ?tipo=abono|entrada|merch    → filtra el dropdown de productos
+        //   ?variante=renovacion|nuevo   → filtra abonos por nombre (variante)
+        //   ?customer_id=N               → pre-selecciona cliente existente
+        //   ?sector_id=N                 → pre-selecciona sector para el modal de butaca
+        //   ?seat_id=N                   → pre-selecciona la butaca (viene de Nuevas altas)
+        $modoParam     = request()->query('modo');
+        $tipoParam     = request()->query('tipo');
+        $varianteParam = request()->query('variante');
+        $customerId    = request()->query('customer_id');
+        $sectorId      = request()->query('sector_id');
+        $seatId        = request()->query('seat_id');
 
         $modo = in_array($modoParam, ['nuevo', 'existente']) ? $modoParam : 'existente';
         $this->tipoProductoFiltro = in_array($tipoParam, ['abono', 'entrada', 'merch']) ? $tipoParam : null;
+        $this->varianteProductoFiltro = in_array($varianteParam, ['renovacion', 'nuevo']) ? $varianteParam : null;
+
+        // Si viene de la pagina VentaAbonos -> Renovacion, restringir metodos
+        // de pago a los de taquilla (efectivo / TPV) y modo cliente fijo.
+        if ($this->varianteProductoFiltro === 'renovacion' || $this->varianteProductoFiltro === 'nuevo') {
+            $this->metodosPagoPermitidos = ['efectivo', 'tpv_fisico'];
+        }
+
+        // Si viene seat_id pero no sector_id, derivar el sector del asiento.
+        if (is_numeric($seatId) && !is_numeric($sectorId)) {
+            $sectorId = \App\Models\Seat::whereKey((int) $seatId)->value('sector_id');
+        }
+
+        // Flujo de abono: resolver producto + precio automáticamente (zona del
+        // asiento / cliente). El operador no elige producto en estos flujos.
+        $autoProd = $this->resolverAbonoAuto(
+            is_numeric($seatId) ? (int) $seatId : null,
+            is_numeric($customerId) ? (int) $customerId : null
+        );
+        if ($autoProd) {
+            $nombreProd = is_array($autoProd->name)
+                ? ($autoProd->name['es'] ?? '')
+                : (string) $autoProd->getTranslation('name', 'es');
+            $this->autoAbono = ['id' => $autoProd->id, 'name' => $nombreProd, 'price' => (float) $autoProd->price];
+        }
 
         $this->form->fill([
             'modo_cliente'   => $modo,
+            'customer_id'    => is_numeric($customerId) ? (int) $customerId : null,
+            'sector_id'      => is_numeric($sectorId) ? (int) $sectorId : null,
+            'seat_id'        => is_numeric($seatId) ? (int) $seatId : null,
+            'product_id'     => $autoProd?->id,
+            'unit_price'     => $autoProd ? (float) $autoProd->price : null,
             'metodo_pago'    => 'efectivo',
             'qty'            => 1,
             'province'       => 'Cádiz',
@@ -100,8 +187,16 @@ class CobroManual extends Page implements HasForms
         return $schema
             ->components([
                 Section::make('1. Cliente')
-                    ->description('Busca por nombre, email o DNI. Si es nuevo, crea su ficha aquí mismo.')
+                    ->description(fn () => match ($this->varianteProductoFiltro) {
+                        'nuevo'      => 'Rellena los datos del nuevo abonado.',
+                        'renovacion' => 'Abonado que renueva (ya seleccionado).',
+                        default      => 'Busca por nombre, email o DNI. Si es nuevo, crea su ficha aquí mismo.',
+                    })
                     ->schema([
+                        // El selector de modo solo se muestra en el Cobro manual
+                        // genérico. En los flujos de abono (nueva alta /
+                        // renovación) el modo ya viene fijado por el flujo, así
+                        // que se oculta para no confundir.
                         Radio::make('modo_cliente')
                             ->label('')
                             ->options([
@@ -110,7 +205,8 @@ class CobroManual extends Page implements HasForms
                             ])
                             ->inline()
                             ->live()
-                            ->required(),
+                            ->required()
+                            ->visible(fn () => !$this->varianteProductoFiltro),
 
                         Select::make('customer_id')
                             ->label('Buscar cliente')
@@ -169,11 +265,28 @@ class CobroManual extends Page implements HasForms
                             ]),
                     ]),
 
-                Section::make('2. Producto')
-                    ->description('Abono, entrada o producto de tienda.')
+                Section::make('2. Abono y pago')
+                    ->description(fn () => $this->varianteProductoFiltro ? 'Asiento, abono y método de pago.' : 'Producto y método de pago.')
+                    ->columns(2)
                     ->schema([
+                        // ── IZQUIERDA: abono / producto + asiento ──
+                        FormGroup::make()
+                            ->columnSpan(1)
+                            ->schema([
+                        // Resumen del abono resuelto automáticamente (flujo alta/renovación).
+                        Placeholder::make('abono_resumen')
+                            ->label('Abono')
+                            ->visible(fn () => (bool) $this->varianteProductoFiltro)
+                            ->content(fn () => $this->autoAbono
+                                ? new \Illuminate\Support\HtmlString(
+                                    '<strong>' . e($this->autoAbono['name']) . '</strong> — '
+                                    . number_format($this->autoAbono['price'], 2, ',', '.') . ' €')
+                                : 'No se ha podido determinar el abono para esta zona.'),
+
+                        // El selector de producto manual solo en cobro genérico.
                         Select::make('product_id')
                             ->label('Producto')
+                            ->visible(fn () => !$this->varianteProductoFiltro)
                             ->searchable()
                             ->options(fn () => Product::query()
                                 ->where('active', 1)
@@ -207,6 +320,7 @@ class CobroManual extends Page implements HasForms
 
                         FormGroup::make()
                             ->columns(2)
+                            ->visible(fn () => !$this->varianteProductoFiltro)
                             ->schema([
                                 TextInput::make('qty')
                                     ->label('Cantidad')
@@ -232,8 +346,14 @@ class CobroManual extends Page implements HasForms
                                 Hidden::make('sector_id')->extraAttributes(['id' => 'cm-sector-id']),
                                 Hidden::make('seat_id')->required()->extraAttributes(['id' => 'cm-seat-id']),
 
+                                // El botón grande de "Elegir butaca" solo se
+                                // muestra si AÚN no hay butaca elegida (cobro
+                                // manual genérico). Si vienes de Nuevas altas
+                                // con la butaca ya seleccionada, se oculta — hay
+                                // un pequeño "cambiar" en "Asiento elegido".
                                 Placeholder::make('btn_elegir_butaca')
                                     ->hiddenLabel()
+                                    ->visible(fn ($get) => empty($get('seat_id')))
                                     ->content(fn () => new \Illuminate\Support\HtmlString(
                                         '<button type="button"'
                                         . ' onclick="window.dispatchEvent(new CustomEvent(\'cm-open-estadio-modal\'))"'
@@ -255,49 +375,61 @@ class CobroManual extends Page implements HasForms
                                         if (!$seatId) return 'Aún no se ha elegido butaca. Pulsa "Elegir butaca" arriba.';
                                         $seat = \App\Models\Seat::with('sector')->find($seatId);
                                         if (!$seat) return 'Butaca no encontrada (id=' . $seatId . ')';
-                                        return "🪑 " . ($seat->sector?->name ?? 'Sector ?') . " · Fila {$seat->row} · Butaca {$seat->number}";
+                                        $txt = "🪑 " . ($seat->sector?->name ?? 'Sector ?') . " · Fila {$seat->row} · Butaca {$seat->number}";
+                                        // Enlace discreto para cambiar la butaca si hiciera falta.
+                                        $cambiar = '<a href="#" onclick="event.preventDefault();window.dispatchEvent(new CustomEvent(\'cm-open-estadio-modal\'))"'
+                                            . ' style="margin-left:12px;font-size:13px;color:#2196F3;text-decoration:underline;cursor:pointer;">cambiar butaca</a>';
+                                        return new \Illuminate\Support\HtmlString(
+                                            '<span style="font-weight:600;">' . e($txt) . '</span>' . $cambiar
+                                        );
                                     })
                                     ->extraAttributes(['id' => 'cm-asiento-display']),
                             ]),
-                    ]),
+                        ]),
 
-                Section::make('3. Método de cobro')
-                    ->schema([
-                        Radio::make('metodo_pago')
-                            ->label('')
-                            ->options(function () {
-                                $todos = [
-                                    'efectivo'       => '💵 Efectivo',
-                                    'bizum'          => '📱 Bizum',
-                                    'transferencia'  => '🏦 Transferencia',
-                                    'tpv_fisico'     => '💳 TPV físico (datafono del club)',
-                                ];
-                                if (!$this->metodosPagoPermitidos) return $todos;
-                                return array_intersect_key($todos, array_flip($this->metodosPagoPermitidos));
-                            })
-                            ->required(),
+                        // ── DERECHA: método de pago + botón comprar ──
+                        FormGroup::make()
+                            ->columnSpan(1)
+                            ->schema([
+                                Radio::make('metodo_pago')
+                                    ->label('Método de pago')
+                                    ->options(function () {
+                                        $todos = [
+                                            'efectivo'       => '💵 Efectivo',
+                                            'bizum'          => '📱 Bizum',
+                                            'transferencia'  => '🏦 Transferencia',
+                                            'tpv_fisico'     => '💳 TPV físico (datafono del club)',
+                                        ];
+                                        if (!$this->metodosPagoPermitidos) return $todos;
+                                        return array_intersect_key($todos, array_flip($this->metodosPagoPermitidos));
+                                    })
+                                    ->required(),
 
-                        Textarea::make('admin_notes')
-                            ->label('Notas (opcional)')
-                            ->placeholder('Quien atiende, referencia bancaria, etc.')
-                            ->rows(2),
+                                Textarea::make('admin_notes')
+                                    ->label('Notas (opcional)')
+                                    ->placeholder('Quien atiende, referencia, etc.')
+                                    ->rows(2),
+
+                                FormActions::make([
+                                    FormAction::make('continuar')
+                                        ->label(fn () => $this->varianteProductoFiltro ? 'Continuar compra' : 'Registrar cobro')
+                                        ->icon(Heroicon::OutlinedCheckCircle)
+                                        ->color('success')
+                                        ->size('lg')
+                                        ->requiresConfirmation()
+                                        ->modalDescription('¿Confirmas registrar este cobro? Se creará el pedido pagado y se emitirá el ticket.')
+                                        ->action(fn () => $this->procesarCobro()),
+                                ]),
+                            ]),
                     ]),
             ])
             ->statePath('data');
     }
 
-    /** Action principal — "Registrar cobro". */
+    /** Sin acciones en el header — el botón principal va al final del form. */
     protected function getHeaderActions(): array
     {
-        return [
-            Action::make('registrar')
-                ->label('Registrar cobro')
-                ->icon(Heroicon::OutlinedCheckCircle)
-                ->color('success')
-                ->requiresConfirmation()
-                ->modalDescription('¿Confirmas registrar este cobro? Se creará el pedido pagado y se emitirá el ticket.')
-                ->action(fn () => $this->procesarCobro()),
-        ];
+        return [];
     }
 
     /** Lógica del cobro: crear customer si nuevo, order pagado, ticket. */
@@ -313,6 +445,24 @@ class CobroManual extends Page implements HasForms
                 $customer = Customer::findOrFail($d['customer_id']);
             }
 
+            // 1b. En flujos de abono (alta/renovación) el producto y precio se
+            //     resuelven SIEMPRE por la zona del asiento — no por el form.
+            if ($this->tipoProductoFiltro === 'abono' && $this->varianteProductoFiltro) {
+                $autoP = $this->resolverAbonoAuto(
+                    isset($d['seat_id']) && is_numeric($d['seat_id']) ? (int) $d['seat_id'] : null,
+                    isset($d['customer_id']) && is_numeric($d['customer_id']) ? (int) $d['customer_id'] : null
+                );
+                if ($autoP) {
+                    $d['product_id'] = $autoP->id;
+                    $d['unit_price'] = (float) $autoP->price;
+                    $d['qty']        = 1;
+                }
+            }
+
+            if (empty($d['product_id'])) {
+                throw new \RuntimeException('No se pudo determinar el producto/abono. Revisa la zona del asiento.');
+            }
+
             // 2. Crear Order + OrderItem dentro de transacción
             $product = Product::findOrFail($d['product_id']);
             $qty       = max(1, (int) ($d['qty'] ?? 1));
@@ -323,7 +473,10 @@ class CobroManual extends Page implements HasForms
             $vat      = round($subtotal * ($vatRate / 100) / (1 + $vatRate / 100), 2);
             $total    = $subtotal;
 
-            DB::transaction(function () use ($customer, $product, $d, $qty, $unitPrice, $vatRate, $subtotal, $vat, $total) {
+            /** @var Order|null $orderCreada */
+            $orderCreada = null;
+
+            DB::transaction(function () use ($customer, $product, $d, $qty, $unitPrice, $vatRate, $subtotal, $vat, $total, &$orderCreada) {
                 $reference = 'ACF-CAJ-' . now()->format('Ym') . '-' . str_pad((string) (Order::max('id') + 1), 6, '0', STR_PAD_LEFT);
 
                 $order = Order::create([
@@ -357,6 +510,8 @@ class CobroManual extends Page implements HasForms
                     'total'      => $total,
                 ]);
 
+                $orderCreada = $order;
+
                 // 3. Si es abono/entrada, generar Tickets QR vía el CheckoutService normal.
                 if (in_array($product->type, ['abono', 'entrada'])) {
                     try {
@@ -367,6 +522,21 @@ class CobroManual extends Page implements HasForms
                     } catch (\Throwable $e) {
                         // No bloquea — el ticket se puede regenerar desde el Order luego.
                         \Log::warning('Cobro manual ticket gen fallo', ['order' => $order->id, 'err' => $e->getMessage()]);
+                    }
+
+                    // 3b. Heredar el QR antiguo del club. Si este customer ya tenía
+                    //     un legacy_qr en algún ticket previo (carnet PVC impreso /
+                    //     app antigua), lo copiamos a los tickets recién creados que
+                    //     no lo tengan, para que su QR antiguo siga funcionando.
+                    //     Para ALTAS NUEVAS (cliente sin legacy_qr) NO inventamos
+                    //     nada: el ticket usará su QR propio (uuid.qr_token).
+                    $legacyQr = Ticket::where('customer_id', $customer->id)
+                        ->whereNotNull('legacy_qr')
+                        ->value('legacy_qr');
+                    if ($legacyQr) {
+                        Ticket::whereHas('orderItem', fn ($q) => $q->where('order_id', $order->id))
+                            ->whereNull('legacy_qr')
+                            ->update(['legacy_qr' => $legacyQr]);
                     }
 
                     // 4. Si es abono y el operador asignó butaca, vincular y marcar
@@ -395,11 +565,55 @@ class CobroManual extends Page implements HasForms
                 }
             });
 
-            Notification::make()
+            // 5. Email de confirmación al cliente (con KILL SWITCH respetado).
+            //    Genera/asegura las credenciales de la app del cliente y le
+            //    envía email con su acceso + abono. Con el kill switch ON
+            //    (estado actual) el método solo escribe en el log y NO conecta
+            //    a SMTP — no sale ningún correo. Best-effort: no rompe el cobro.
+            if ($orderCreada) {
+                try {
+                    $checkout = app(CheckoutService::class);
+                    $fresh    = $orderCreada->fresh(['items.product', 'tickets', 'customer']);
+
+                    // Password en claro: si era cliente NUEVO, la que se generó
+                    // al crear su User. Si era EXISTENTE, asegurar credenciales
+                    // (crea/resetea User si no tenía cuenta usable).
+                    $appPassword = $this->appPasswordGenerada;
+                    if ($appPassword === null && method_exists($checkout, 'ensureAppCredentials')) {
+                        $appPassword = $checkout->ensureAppCredentials($customer->fresh());
+                    }
+
+                    $checkout->sendOrderConfirmationEmail($fresh, $appPassword);
+                } catch (\Throwable $e) {
+                    \Log::warning('Cobro manual: email confirmacion no enviado', [
+                        'order' => $orderCreada->id,
+                        'err'   => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            $notif = Notification::make()
                 ->title('Cobro registrado correctamente')
                 ->body('Pedido creado y marcado como pagado. Email del cliente: ' . $customer->email)
-                ->success()
-                ->send();
+                ->success();
+
+            // Si se emitió un ticket de abono/entrada, ofrecer imprimir el
+            // carnet PVC del primer ticket del pedido recién creado.
+            if ($orderCreada && in_array($product->type, ['abono', 'entrada'], true)) {
+                $ticketImprimir = Ticket::whereHas('orderItem', fn ($q) => $q->where('order_id', $orderCreada->id))
+                    ->orderBy('id')
+                    ->first();
+                if ($ticketImprimir) {
+                    $notif->actions([
+                        \Filament\Notifications\Actions\Action::make('imprimir_carnet')
+                            ->label('🖨️ Imprimir carnet')
+                            ->url(route('admin.carnet', ['ticket' => $ticketImprimir->id]), shouldOpenInNewTab: true)
+                            ->button(),
+                    ]);
+                }
+            }
+
+            $notif->send();
 
             // Reset form
             $this->form->fill([
@@ -419,19 +633,35 @@ class CobroManual extends Page implements HasForms
         }
     }
 
+    /**
+     * Contraseña EN CLARO generada para el cliente nuevo en este cobro.
+     * Solo vive en memoria durante la request, para pasarla al email de
+     * confirmación. Nunca se persiste en claro ni se loguea.
+     */
+    protected ?string $appPasswordGenerada = null;
+
     /** Crea User + Customer cuando el operador marca "cliente nuevo". */
     protected function crearCustomerYUser(array $d): Customer
     {
         return DB::transaction(function () use ($d) {
             $email = $d['email'];
 
+            // Contraseña legible (8-10 chars, sin símbolos) para que el cliente
+            // pueda escribirla a mano en la app desde el email. Se guarda
+            // HASHEADA; el plano solo se retiene en memoria para el email.
+            $plain = Str::password(10, letters: true, numbers: true, symbols: false, spaces: false);
+
             $user = User::firstOrCreate(
                 ['email' => $email],
                 [
                     'name'     => trim(($d['first_name'] ?? '') . ' ' . ($d['last_name'] ?? '')),
-                    'password' => Hash::make(Str::random(16)),
+                    'password' => Hash::make($plain),
                 ]
             );
+
+            // Solo exponemos el plano si el User se ha CREADO ahora (wasRecentlyCreated).
+            // Si ya existía (cliente recurrente con cuenta), no tocamos su clave.
+            $this->appPasswordGenerada = $user->wasRecentlyCreated ? $plain : null;
 
             $customer = Customer::firstOrCreate(
                 ['email' => $email],
@@ -449,6 +679,11 @@ class CobroManual extends Page implements HasForms
                     'country'     => 'ES',
                 ]
             );
+
+            // Asegurar vínculo customer->user si el customer ya existía sin él.
+            if (!$customer->user_id) {
+                $customer->forceFill(['user_id' => $user->id])->save();
+            }
 
             return $customer;
         });

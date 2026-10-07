@@ -16,6 +16,10 @@
     <p><strong>Vendedor:</strong> {{ $c['razon_social'] }} (CIF {{ $c['cif'] }}), con domicilio en
        {{ $c['direccion']['calle'] }}, {{ $c['direccion']['codigo_postal'] }}
        {{ $c['direccion']['localidad'] }} ({{ $c['direccion']['provincia'] }}).</p>
+    <p><strong>Comercio que procesa el cobro (TPV Virtual):</strong> {{ $c['comercio']['razon_social'] }}
+       (CIF {{ $c['comercio']['cif'] }}), {{ $c['comercio']['direccion'] }}. Los pagos con tarjeta se
+       gestionan a través de su TPV Virtual de Banco Sabadell (Redsys); el cargo en la tarjeta del
+       cliente figurará a nombre de este comercio.</p>
 
     <h2>2. Productos ofrecidos</h2>
     <ul>

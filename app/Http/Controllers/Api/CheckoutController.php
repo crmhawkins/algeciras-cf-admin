@@ -220,7 +220,9 @@ class CheckoutController extends Controller
                 'coupon_code'      => $coupon?->code,
                 'total'            => $totalFinal,
                 'currency'         => 'EUR',
-                'payment_gateway'  => 'stripe',
+                // La app abre /pago-app/{ref}, que usa la pasarela configurada
+                // (Redsys por defecto). Registramos la real, no 'stripe' heredado.
+                'payment_gateway'  => config('services.payment.gateway', 'redsys'),
                 'payment_intent_id'=> null,
                 'admin_notes'      => sprintf(
                     'App mobile: type=%s sectorId=%s asientoId=%s dni=%s | precio_base=%.2f gestion_5pct=%.2f coupon=%s discount=%.2f',

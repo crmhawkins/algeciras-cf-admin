@@ -37,7 +37,7 @@
 
         {{ $this->form }}
 
-        @if (in_array(get_class($this), [App\Filament\Pages\AbonoNuevo::class, App\Filament\Pages\RenovacionAbono::class]))
+        @if ($this->tipoProductoFiltro === 'abono')
             {{-- El boton "Elegir butaca" ahora se renderiza DENTRO del form
                  (Placeholder btn_elegir_butaca en CobroManual.php) justo encima
                  del campo "Asiento elegido". Aqui solo queda el modal. --}}

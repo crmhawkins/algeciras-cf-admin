@@ -34,6 +34,19 @@ class FootballMatch extends Model
     public function scopeFinished($q) { return $q->where('status','finished')->orderByDesc('kickoff_at'); }
     public function scopeHome($q)     { return $q->where('venue','home'); }
 
+    /** Nombre del evento como en el proveedor: "Algeciras CF - Rival (Jornada N)". */
+    public function getEventoNombreAttribute(): string
+    {
+        $rival = $this->opponent ?: 'Rival';
+        $nombre = ($this->venue === 'home')
+            ? "Algeciras CF - {$rival}"
+            : "{$rival} - Algeciras CF";
+        if ($this->matchday) {
+            $nombre .= " (Jornada {$this->matchday})";
+        }
+        return $nombre;
+    }
+
     public function getResultAttribute(): ?string
     {
         if ($this->status !== 'finished') return null;
