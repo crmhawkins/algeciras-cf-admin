@@ -85,15 +85,22 @@ nombre aleatorio en `public/` creado como `www-data`, que se llama por HTTPS y s
 borra en el acto (`<?php echo opcache_reset() ? "OK" : "FAIL";`). Antes, `view:clear`
 como `www-data`. Los cambios del `.env` NO lo necesitan (`env()` se lee en caliente).
 
-⚠️ **NO usar redeploy de Coolify para esto**: `main` va muy por detrás del
-contenedor (hotfixes por `docker cp` sin commitear) y el `.env` del contenedor no
-está en la imagen (`.dockerignore`). Un redeploy hoy borraría los hotfixes y la
-config de Redsys. Consolidar primero en git.
+⚠️ **NO usar redeploy de Coolify para esto.** El 07/10/2026 se consolidó en
+`main` todo lo que había en el contenedor (commits `9a029f8` + `1ebcb47`), pero un
+redeploy sigue siendo peligroso:
+- **No hay volumen persistente** (ni en Docker ni en Coolify): `storage/` (PNG de
+  los QR, fotos, ficheros subidos) vive DENTRO del contenedor y se perdería.
+- El `.env` del contenedor no está en la imagen (`.dockerignore`): se perderían
+  las claves de Stripe y lo que no esté como variable de Coolify.
+- Tras cada `docker cp`, subir también a `main` para no volver a desincronizar.
+Auto-deploy de Coolify DESACTIVADO (`is_auto_deploy_enabled=false`): un push a
+`main` no despliega.
 
 ### Cuándo SÍ hace falta disparar redeploy de Coolify
 
 - Solo con cambios de assets (Vite), `composer.json`, Dockerfile o entrypoint,
-  y SOLO después de consolidar el contenedor en `main`. Pedir permiso antes.
+  y SOLO después de poner un volumen persistente para `storage/` y comprobar que
+  `main` == contenedor. Pedir permiso antes.
 
 ### Disparar redeploy de Coolify (cuando haga falta)
 
