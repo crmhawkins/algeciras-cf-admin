@@ -16,7 +16,8 @@ ni redeploy de Coolify (rebuild de imagen) salvo que:
 > ⚠️ (2026-10-07) El acceso `-i ~/.ssh/hawcert_server claude@...` de abajo YA NO
 > VALE. Al 79 se entra con `~/.ssh/ivan_servers`, usuario `ivan`, saltando por el
 > 81 con ProxyCommand, y `sudo docker` (detalle en `~/.claude/CLAUDE.md`).
-> El contenedor actual es `mos48s4400kwo44w0g0w0ssk-075909058440`.
+> El contenedor cambia de nombre en cada despliegue: sácalo con
+> `sudo docker ps --filter label=coolify.applicationId=6 --format '{{.Names}}'`.
 
 ```bash
 # 1. Editar local en D:\proyectos\programasivan\algeciras-cf-web
@@ -85,22 +86,23 @@ nombre aleatorio en `public/` creado como `www-data`, que se llama por HTTPS y s
 borra en el acto (`<?php echo opcache_reset() ? "OK" : "FAIL";`). Antes, `view:clear`
 como `www-data`. Los cambios del `.env` NO lo necesitan (`env()` se lee en caliente).
 
-⚠️ **NO usar redeploy de Coolify para esto.** El 07/10/2026 se consolidó en
-`main` todo lo que había en el contenedor (commits `9a029f8` + `1ebcb47`), pero un
-redeploy sigue siendo peligroso:
-- **No hay volumen persistente** (ni en Docker ni en Coolify): `storage/` (PNG de
-  los QR, fotos, ficheros subidos) vive DENTRO del contenedor y se perdería.
-- El `.env` del contenedor no está en la imagen (`.dockerignore`): se perderían
-  las claves de Stripe y lo que no esté como variable de Coolify.
-- Tras cada `docker cp`, subir también a `main` para no volver a desincronizar.
-Auto-deploy de Coolify DESACTIVADO (`is_auto_deploy_enabled=false`): un push a
-`main` no despliega.
+**Estado desde el 07/10/2026** (redeploy hecho y verificado):
+- `storage/` va en el volumen persistente `mos48s4400kwo44w0g0w0ssk-storage`
+  (registrado en Coolify, `local_persistent_volumes` id 90): sobrevive a redeploys.
+- No hay `.env` en el contenedor: TODA la config (Redsys, Stripe, mail…) son
+  variables de entorno de Coolify. Para cambiarlas, en Coolify (panel o modelo
+  `EnvironmentVariable` vía tinker como `www-data` en el contenedor `coolify`),
+  filas normal y preview, y luego redeploy.
+- `main` == producción. Tras cada `docker cp`, subir también a `main`: el siguiente
+  redeploy reconstruye desde `main` y lo que no esté ahí se pierde.
+- Auto-deploy de Coolify DESACTIVADO (`is_auto_deploy_enabled=false`): un push a
+  `main` no despliega.
 
 ### Cuándo SÍ hace falta disparar redeploy de Coolify
 
-- Solo con cambios de assets (Vite), `composer.json`, Dockerfile o entrypoint,
-  y SOLO después de poner un volumen persistente para `storage/` y comprobar que
-  `main` == contenedor. Pedir permiso antes.
+- Con cambios de assets (Vite), `composer.json`, Dockerfile, entrypoint o
+  variables de Coolify, y SOLO tras comprobar que `main` == contenedor. Pedir
+  permiso antes (corte de segundos). El arranque ejecuta `migrate --force`.
 
 ### Disparar redeploy de Coolify (cuando haga falta)
 
@@ -162,6 +164,9 @@ compralaentrada.com).
 
 ## Cambios recientes
 
+- **2026-10-07**: volumen persistente para `storage/` + config Redsys/Stripe movida
+  a variables de Coolify (tenía guardado Redsys REAL con un comercio ajeno, que el
+  redeploy habría aplicado). Redeploy desde `aba3a93` verificado.
 - **2026-10-07**: Redsys (Caja Rural del Sur) en TEST en el subdominio; cerrado el
   agujero de `/simulado`; carrito y app también pagan por Redsys; textos legales
   con el banco correcto; migraciones compatibles con SQLite para desarrollo local.
