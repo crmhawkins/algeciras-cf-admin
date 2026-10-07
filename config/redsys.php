@@ -1,7 +1,8 @@
 <?php
 
 /**
- * Configuración del TPV Virtual Redsys (Banco Sabadell).
+ * Configuración del TPV Virtual Redsys (Caja Rural del Sur — comercio
+ * "ALGECIRAS CF", FUC 370436875, terminal 100; credenciales en .env).
  *
  * En entorno PRUEBAS la URL es https://sis-t.redsys.es:25443/sis/realizarPago
  * En entorno PRODUCCIÓN la URL es https://sis.redsys.es/sis/realizarPago
@@ -13,8 +14,12 @@
 return [
     'env' => env('REDSYS_ENV', 'test'),  // 'test' | 'prod'
 
-    'merchant_code' => env('REDSYS_MERCHANT_CODE', '337699599'),
-    'terminal'      => env('REDSYS_TERMINAL', '2'),
+    // Comercio y terminal reales del club (no son secretos: salen en la propia
+    // pantalla de pago y son los mismos en pruebas y en real). Por defecto aquí
+    // porque el .env del contenedor no forma parte de la imagen y un redeploy
+    // lo perdería; antes el defecto era un comercio ajeno (337699599 / 2).
+    'merchant_code' => env('REDSYS_MERCHANT_CODE', '370436875'),
+    'terminal'      => env('REDSYS_TERMINAL', '100'),
     'currency'      => env('REDSYS_CURRENCY', '978'),   // 978 = EUR
     'sha256_key'    => env('REDSYS_SHA256_KEY', 'sq7HjrUOBfKmC576ILgskD5srU870gJ7'),
 

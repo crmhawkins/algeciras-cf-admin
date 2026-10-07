@@ -521,7 +521,7 @@ class CheckoutService
         }
         $order->update([
             'status'      => 'failed',
-            'admin_notes' => trim(($order->admin_notes ?? '') . "\nStripe fail: " . ($reason ?? '?')),
+            'admin_notes' => trim(($order->admin_notes ?? '') . "\nPago fallido: " . ($reason ?? '?')),
         ]);
         return $order;
     }

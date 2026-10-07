@@ -18,7 +18,7 @@
        {{ $c['direccion']['localidad'] }} ({{ $c['direccion']['provincia'] }}).</p>
     <p><strong>Comercio que procesa el cobro (TPV Virtual):</strong> {{ $c['comercio']['razon_social'] }}
        (CIF {{ $c['comercio']['cif'] }}), {{ $c['comercio']['direccion'] }}. Los pagos con tarjeta se
-       gestionan a través de su TPV Virtual de Banco Sabadell (Redsys); el cargo en la tarjeta del
+       gestionan a través de su TPV Virtual de {{ $c['banco'] }} (Redsys); el cargo en la tarjeta del
        cliente figurará a nombre de este comercio.</p>
 
     <h2>2. Productos ofrecidos</h2>

@@ -24,6 +24,9 @@ class CheckoutForm extends Component
     /** Cupón aplicado en el resumen (lo rellena Alpine vía hidden input). */
     public string $coupon_code = '';
 
+    /** Aceptación de condiciones de venta — obligatoria antes de ir a Redsys (LSSI-CE). */
+    public bool $accept_terms = false;
+
     public ?string $error = null;
 
     /** Set tras crear el PaymentIntent — disparado a la vista para que Stripe.js termine el flow. */
@@ -45,24 +48,34 @@ class CheckoutForm extends Component
             'postal_code' => 'required|string|max:12',
             'country'     => 'required|string|max:80',
             'coupon_code' => 'nullable|string|max:40',
+            'accept_terms'=> $this->gateway() === 'redsys' ? 'accepted' : 'nullable',
+        ];
+    }
+
+    protected function messages(): array
+    {
+        return [
+            'accept_terms.accepted' => 'Debes aceptar las condiciones de venta para continuar.',
         ];
     }
 
     /**
-     * Submit: NO completa el pago. Crea Order(pending) + PaymentIntent.
-     * Devuelve el clientSecret a la vista para que Stripe.js termine el cobro
-     * con stripe.confirmPayment({...}).
+     * Submit: NO completa el pago. Crea la Order(pending) y la manda a la
+     * pasarela activa (config services.payment.gateway):
+     *   - redsys    → redirige a /pago/redsys/{ref}, que auto-postea al banco.
+     *   - stripe    → crea el PaymentIntent y Stripe.js termina el cobro.
+     *   - simulated → SOLO pruebas: marca el pedido como pagado sin cobrar.
      *
-     * Si STRIPE_SECRET no está configurado, cae al flujo simulado heredado
-     * para que el checkout siga funcional mientras el club no tenga claves.
+     * Antes este checkout ignoraba PAYMENT_GATEWAY: cobraba siempre por Stripe
+     * y, sin claves de Stripe, regalaba el pedido (placeOrderSimulated).
      */
     public function submit(CheckoutService $checkout, StripePaymentService $stripe)
     {
         $data = $this->validate();
+        unset($data['accept_terms']);
 
         try {
-            // ¿Stripe operativo?
-            $stripeOperativo = (string) config('services.stripe.secret') !== '';
+            $gateway = $this->gateway();
 
             // El cupón (si llegó) se reenvía al CheckoutService como una clave
             // más del array `$data`. El servicio lo aplica al crear la Order.
@@ -70,11 +83,30 @@ class CheckoutForm extends Component
                 $data['coupon_code'] = strtoupper(trim($this->coupon_code));
             }
 
-            if (!$stripeOperativo) {
-                // Fallback simulado (el comportamiento que ya tenía la web).
+            if ($gateway === 'simulated') {
                 $order = $checkout->placeOrderSimulated($data);
                 $this->dispatch('cart-updated');
                 return redirect()->route('pedido', $order->reference);
+            }
+
+            if ($gateway === 'redsys') {
+                $order = $checkout->createPendingOrder($data);
+                app(Cart::class)->clear();
+                $this->dispatch('cart-updated');
+
+                // Cupón que deja el total a 0: Redsys no admite importe 0, así
+                // que se confirma directamente (mismo criterio que /pago-app).
+                if ((float) $order->total < 0.50) {
+                    $order = $checkout->markOrderPaid($order, 'free_' . uniqid());
+                    $order->update(['payment_gateway' => 'free']);
+                    return redirect()->route('pedido', $order->reference);
+                }
+
+                return redirect()->route('redsys.start', $order->reference);
+            }
+
+            if ((string) config('services.stripe.secret') === '') {
+                throw new \RuntimeException('El pago online no está disponible en este momento. Inténtalo más tarde.');
             }
 
             $order  = $checkout->createPendingOrder($data);
@@ -112,6 +144,13 @@ class CheckoutForm extends Component
     public function stripeOperativo(): bool
     {
         return (string) config('services.stripe.secret') !== '';
+    }
+
+    /** Pasarela activa: 'redsys' | 'stripe' | 'simulated'. */
+    #[Computed]
+    public function gateway(): string
+    {
+        return (string) config('services.payment.gateway', 'redsys');
     }
 
     public function render()

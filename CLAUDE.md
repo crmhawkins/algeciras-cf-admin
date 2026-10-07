@@ -13,6 +13,11 @@ ni redeploy de Coolify (rebuild de imagen) salvo que:
 
 ### Flujo correcto
 
+> ⚠️ (2026-10-07) El acceso `-i ~/.ssh/hawcert_server claude@...` de abajo YA NO
+> VALE. Al 79 se entra con `~/.ssh/ivan_servers`, usuario `ivan`, saltando por el
+> 81 con ProxyCommand, y `sudo docker` (detalle en `~/.claude/CLAUDE.md`).
+> El contenedor actual es `mos48s4400kwo44w0g0w0ssk-075909058440`.
+
 ```bash
 # 1. Editar local en D:\proyectos\programasivan\algeciras-cf-web
 # 2. SCP al servidor (host)
@@ -72,11 +77,23 @@ www-data, backups forenses, verificación en Chrome) siguen aplicando.
 | Stack | Laravel 11 + Filament v5 + Livewire 4 + Tailwind v4 + MariaDB + Redis |
 | OPcache producción | `validate_timestamps=0` → cambios en `.php` NO se ven hasta opcache reset o rebuild |
 
-### Cuándo SÍ hace falta dispar redeploy de Coolify
+### OPcache: cómo activar los `.php` copiados (NO redeploy)
 
-- Solo cuando hay cambios en `.php` que NO se ven por `docker cp`
-  porque OPcache cachea bytecode antiguo. En ese caso pedirme primero
-  permiso ANTES de disparar el rebuild.
+Con `validate_timestamps=0` los `.php` (y las vistas compiladas) copiados por
+`docker cp` no se activan solos. Se resetea OPcache con un script temporal de
+nombre aleatorio en `public/` creado como `www-data`, que se llama por HTTPS y se
+borra en el acto (`<?php echo opcache_reset() ? "OK" : "FAIL";`). Antes, `view:clear`
+como `www-data`. Los cambios del `.env` NO lo necesitan (`env()` se lee en caliente).
+
+⚠️ **NO usar redeploy de Coolify para esto**: `main` va muy por detrás del
+contenedor (hotfixes por `docker cp` sin commitear) y el `.env` del contenedor no
+está en la imagen (`.dockerignore`). Un redeploy hoy borraría los hotfixes y la
+config de Redsys. Consolidar primero en git.
+
+### Cuándo SÍ hace falta disparar redeploy de Coolify
+
+- Solo con cambios de assets (Vite), `composer.json`, Dockerfile o entrypoint,
+  y SOLO después de consolidar el contenedor en `main`. Pedir permiso antes.
 
 ### Disparar redeploy de Coolify (cuando haga falta)
 
@@ -119,7 +136,28 @@ compralaentrada.com).
 | `/tienda`, `/tienda/{product:slug}` | `PageController` |
 | `/abonos`, `/calendario`, etc. | `PageController` |
 
+## Pagos (Redsys)
+
+- TPV Virtual de **Caja Rural del Sur**, comercio "ALGECIRAS CF", FUC `370436875`,
+  terminal `100` (por defecto en `config/redsys.php`). Pasarela activa:
+  `PAYMENT_GATEWAY=redsys|stripe|simulated` (`config/services.php`).
+- TEST: `REDSYS_ENV=test` + clave pública de pruebas de Redsys. REAL: `REDSYS_ENV=prod`
+  + `REDSYS_SHA256_KEY` de producción (la manda Redsys al validar las pruebas).
+- Flujo: `/comprar-directo/{slug}` o carrito → `/pago-app/{ref}` → `/pago/redsys/{ref}`
+  (form firmado HMAC_SHA256_V1) → banco → `notify` server-to-server + vuelta a
+  `/pago/ok|ko` (ambos verifican firma, importe y marcan el pedido; idempotente).
+- `/pago-app/{ref}/simulado` solo confirma sin cobro si total < 0,50€ o gateway
+  `simulated` (antes regalaba abonos con QR válido a cualquiera).
+- Pruebas con tarjeta: en LOCAL (`php artisan serve --host=127.0.0.1`), tarjeta de
+  test Redsys 4548 8120 4940 0004, 12/34, CVV 123. Tests:
+  `DB_CONNECTION=sqlite DB_DATABASE=:memory: php artisan test --filter=RedsysPagoTest`
+  (¡nunca sin esas variables: phpunit.xml apunta a la SQLite local!).
+
 ## Cambios recientes
+
+- **2026-10-07**: Redsys (Caja Rural del Sur) en TEST en el subdominio; cerrado el
+  agujero de `/simulado`; carrito y app también pagan por Redsys; textos legales
+  con el banco correcto; migraciones compatibles con SQLite para desarrollo local.
 
 - **2026-05-26**: Disposición real de butacas 1:1 desde compralaentrada
   (commit `2b4621b`). 60 sectores con rows/seats_row/initial_row/initial_seat

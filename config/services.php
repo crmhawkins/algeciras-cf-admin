@@ -15,7 +15,8 @@ return [
     */
 
     /*
-    | Pasarela de pago activa: 'redsys' (Banco Sabadell) o 'stripe'.
+    | Pasarela de pago activa: 'redsys' (TPV Virtual Caja Rural del Sur), 'stripe'
+    | o 'simulated' (SOLO pruebas: confirma pedidos sin cobrar).
     | Por defecto Redsys, que es la que el club tiene contratada en producción.
     */
     'payment' => [

@@ -400,9 +400,17 @@ Route::get('/pago-app/{order:reference}', function (\App\Models\Order $order) {
     ]);
 })->name('pago-app');
 
-// Si Stripe no está configurado, el cliente confirma una "reserva sin cobro"
-// para que el club los contacte. Marca la Order como paid simulada.
+// Confirmación SIN cobro: marca la Order como paid y emite tickets+QR.
+// Solo se permite para un pedido realmente gratuito (cupón 100%, total
+// < 0,50€) o con la pasarela puesta explícitamente en modo pruebas
+// (PAYMENT_GATEWAY=simulated). Antes no comprobaba nada: cualquiera podía
+// crear un pedido en /comprar-directo y hacer este POST para llevarse el
+// abono/entrada con un QR válido en puerta sin pagar.
 Route::post('/pago-app/{order:reference}/simulado', function (\App\Models\Order $order) {
+    $gratis    = ((float) $order->total) < 0.50;
+    $simulated = config('services.payment.gateway') === 'simulated';
+    abort_unless($gratis || $simulated, 403, 'Este pedido debe pagarse con tarjeta.');
+
     if ($order->status === 'pending') {
         app(\App\Services\CheckoutService::class)->markOrderPaid($order, 'sim_' . uniqid());
         $order->update(['payment_gateway' => 'simulated']);

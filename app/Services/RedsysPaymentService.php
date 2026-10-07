@@ -111,6 +111,10 @@ class RedsysPaymentService
 
             $expected = $this->createSignature($merchantParameters, (string) $order);
 
+            // Redsys firma en base64 URL-safe, pero según el canal la firma
+            // puede llegar en base64 estándar (+/): normalizamos antes de comparar.
+            $signature = strtr($signature, '+/', '-_');
+
             // Tiempo constante para evitar timing attacks
             if (! hash_equals($expected, $signature)) {
                 Log::warning('Redsys signature mismatch', ['expected' => substr($expected, 0, 12), 'received' => substr($signature, 0, 12)]);

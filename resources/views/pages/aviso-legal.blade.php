@@ -34,7 +34,7 @@
 
     <h3 class="font-display uppercase tracking-wide text-algeciras-red mt-8">Comercio que procesa los pagos (TPV Virtual)</h3>
     <p>La venta de abonos, entradas y servicios la realiza {{ $c['razon_social'] }}. El cobro con
-       tarjeta se procesa de forma segura a través del TPV Virtual de Banco Sabadell (Redsys), cuyo
+       tarjeta se procesa de forma segura a través del TPV Virtual de {{ $c['banco'] }} (Redsys), cuyo
        comercio titular es:</p>
 
     <table class="not-prose w-full text-sm border-collapse my-6">

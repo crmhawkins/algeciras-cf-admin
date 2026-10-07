@@ -215,21 +215,26 @@
                         ✓ Confirmar pedido (gratis)
                     </button>
                 </form>
-            @elseif (! $stripeOperativo)
-                {{-- Sin claves Stripe: mensaje honesto y opción de marcar como simulado --}}
+            @elseif (($gateway ?? 'redsys') === 'simulated' || (($gateway ?? 'redsys') === 'stripe' && ! $stripeOperativo))
+                {{-- Modo pruebas (PAYMENT_GATEWAY=simulated) o Stripe sin claves.
+                     Antes esta rama iba ANTES que la de Redsys y se activaba solo
+                     por faltar las claves de Stripe, aunque la pasarela fuese
+                     Redsys: el cliente veía "sin cobro" en vez de pagar. --}}
                 <section class="bg-algeciras-cream border-l-4 border-algeciras-gold p-4 mb-4 text-sm">
                     <p class="font-bold mb-1">Pasarela en preparación</p>
                     <p>El cobro online estará disponible en cuanto el club active la pasarela. De momento, te enviaremos un email para coordinar el pago manualmente.</p>
                 </section>
-                <form method="POST" action="{{ route('pago-app.simulado', $order->reference) }}">
-                    @csrf
-                    <button type="submit"
-                            class="w-full px-6 py-4 bg-algeciras-gold text-algeciras-black font-display tracking-widest uppercase shadow-brutal">
-                        Confirmar reserva (sin cobro)
-                    </button>
-                </form>
+                @if (($gateway ?? 'redsys') === 'simulated')
+                    <form method="POST" action="{{ route('pago-app.simulado', $order->reference) }}">
+                        @csrf
+                        <button type="submit"
+                                class="w-full px-6 py-4 bg-algeciras-gold text-algeciras-black font-display tracking-widest uppercase shadow-brutal">
+                            Confirmar reserva (sin cobro)
+                        </button>
+                    </form>
+                @endif
             @elseif (($gateway ?? 'redsys') === 'redsys')
-                {{-- === REDSYS TPV virtual (Banco Sabadell) ===
+                {{-- === REDSYS TPV virtual (config club.banco) ===
                      El usuario debe aceptar las condiciones (checkbox) antes
                      de que se le redirija a la pasarela. Requisito Redsys +
                      Ley 34/2002 LSSI-CE. --}}
@@ -259,7 +264,7 @@
 
                     <p class="mt-3 text-xs text-gray-500 leading-snug">
                         El cobro lo procesa <strong>{{ config('club.comercio.razon_social') }}</strong>
-                        (CIF {{ config('club.comercio.cif') }}) mediante TPV Virtual de Banco Sabadell.
+                        (CIF {{ config('club.comercio.cif') }}) mediante TPV Virtual de {{ config('club.banco') }}.
                         El cargo en tu tarjeta figurará a nombre de este comercio.
                     </p>
                 </section>

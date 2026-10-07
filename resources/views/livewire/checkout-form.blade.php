@@ -82,9 +82,38 @@
             <section class="bg-white border-2 border-algeciras-black/10 p-6 space-y-4">
                 <h2 class="font-display text-2xl">Pago seguro</h2>
 
-                @if (! $this->stripeOperativo)
+                @if ($this->gateway === 'redsys')
+                    <div class="flex items-start gap-3 p-4 bg-gray-50 text-sm leading-relaxed">
+                        <div class="text-3xl">💳</div>
+                        <div>
+                            <strong>Tarjeta de crédito o débito</strong> (Visa, Mastercard, Maestro).<br>
+                            Al confirmar te llevamos a la pasarela segura de {{ config('club.banco') }}
+                            (<strong>Redsys</strong>, autenticación 3D Secure).<br>
+                            <em class="text-xs text-algeciras-gray">No almacenamos los datos de tu tarjeta.</em>
+                        </div>
+                    </div>
+                    <label class="flex items-start gap-2 text-sm cursor-pointer">
+                        <input type="checkbox" wire:model="accept_terms" class="mt-0.5 w-5 h-5 accent-algeciras-red">
+                        <span>
+                            He leído y acepto las
+                            <a href="{{ route('condiciones-venta') }}" target="_blank" class="text-algeciras-red underline">condiciones de venta, cancelación y devolución</a>,
+                            la <a href="{{ route('politica-entrega') }}" target="_blank" class="text-algeciras-red underline">política de entrega</a>
+                            y el <a href="{{ route('aviso-legal') }}" target="_blank" class="text-algeciras-red underline">aviso legal</a>.
+                        </span>
+                    </label>
+                    @error('accept_terms') <p class="text-xs text-algeciras-red">{{ $message }}</p> @enderror
+                    <p class="text-xs text-algeciras-gray leading-snug">
+                        El cobro lo procesa <strong>{{ config('club.comercio.razon_social') }}</strong>
+                        (CIF {{ config('club.comercio.cif') }}) mediante TPV Virtual de {{ config('club.banco') }}.
+                        El cargo en tu tarjeta figurará a nombre de este comercio.
+                    </p>
+                @elseif ($this->gateway === 'simulated')
                     <div class="bg-algeciras-cream p-4 border-l-4 border-algeciras-gold text-sm">
-                        <strong class="font-display tracking-widest uppercase">Pago simulado</strong> · STRIPE_SECRET no configurado. El pedido se marcará como pagado de forma simulada para test.
+                        <strong class="font-display tracking-widest uppercase">Pago simulado</strong> · Modo pruebas (PAYMENT_GATEWAY=simulated). El pedido se marcará como pagado sin cobrar.
+                    </div>
+                @elseif (! $this->stripeOperativo)
+                    <div class="bg-algeciras-cream p-4 border-l-4 border-algeciras-gold text-sm">
+                        <strong class="font-display tracking-widest uppercase">Pasarela no disponible</strong> · El pago online no está disponible en este momento.
                     </div>
                 @else
                     {{-- Stripe Payment Element se monta aquí cuando submit() devuelva clientSecret --}}
@@ -190,7 +219,7 @@
         </aside>
     </form>
 
-    @if ($this->stripeOperativo)
+    @if ($this->gateway === 'stripe' && $this->stripeOperativo)
         {{-- Stripe.js + montaje del Payment Element cuando el evento stripe:ready dispara --}}
         <script src="https://js.stripe.com/v3/"></script>
         <script>

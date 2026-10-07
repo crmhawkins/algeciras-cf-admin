@@ -46,10 +46,14 @@ return [
     'app_store_url'  => env('CLUB_APP_STORE_URL',  'https://apps.apple.com/app/algeciras-cf'),
     'play_store_url' => env('CLUB_PLAY_STORE_URL', 'https://play.google.com/store/apps/details?id=com.algecirascf.app'),
 
-    // Dato técnico Redsys (para mostrarlo en aviso legal según exige Redsys)
-    'banco' => env('CLUB_BANCO', 'Banco Sabadell'),
+    // Dato técnico Redsys (para mostrarlo en aviso legal según exige Redsys).
+    // El TPV Virtual del comercio "ALGECIRAS CF" (FUC 370436875) está contratado
+    // con Caja Rural del Sur (alta Redsys de 02/10/2026; la pasarela sale como
+    // Ruralvía). Antes ponía Banco Sabadell, de la solicitud anterior.
+    'banco' => env('CLUB_BANCO', 'Caja Rural del Sur'),
 
-    // COMERCIO / pasarela de pago — titular del TPV Virtual Redsys (Banco Sabadell).
+    // COMERCIO / pasarela de pago — titular del TPV Virtual Redsys (Caja Rural
+    // del Sur). Confirmado por Iván el 07/10/2026: el titular es thwork3000, S.L.
     // OPCIÓN B: el CLUB es el VENDEDOR de cara al cliente; thwork3000, S.L. es el
     // COMERCIO que procesa el cobro con tarjeta. Estos datos DEBEN coincidir con el
     // contrato de comercio firmado con el banco (incidencia nº1 de Sabadell).
